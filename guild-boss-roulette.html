@@ -17,16 +17,38 @@
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
   header img { width:86px; height:86px; object-fit:contain; border:0; background:transparent; flex:0 0 auto; filter:drop-shadow(2px 3px 0 #2b1a0e); }
   .meadow { position:fixed; inset:0; pointer-events:none; z-index:1; overflow:hidden; }
-  .critter { position:absolute; bottom:1vh; height:168px; width:auto; transform-origin:50% 100%; }
-  .critter.a { left:1%; animation:hop .72s ease-in-out infinite; }
-  .critter.b { left:12%; height:142px; animation:hop .86s ease-in-out infinite .12s; }
-  .critter.c { right:1%; animation:hop .78s ease-in-out infinite .2s; }
-  .critter.d { right:12%; height:150px; animation:hop .9s ease-in-out infinite .05s; }
-  @keyframes hop {
-    0%,100% { transform:translateY(0) rotate(-7deg); }
-    30% { transform:translateY(-16px) rotate(8deg); }
-    55% { transform:translateY(0) rotate(-3deg) scale(1.04,.94); }
-    78% { transform:translateY(-8px) rotate(5deg); }
+  .critter { position:absolute; bottom:0; height:118px; width:auto; transform-origin:50% 70%; }
+  .critter.a { left:2%; animation:moon 2.4s ease-in-out infinite; }
+  .critter.b { left:18%; height:108px; animation:breakd 2.6s linear infinite; }
+  .critter.c { left:34%; height:112px; animation:worm 2.1s ease-in-out infinite; }
+  .critter.d { right:34%; height:104px; animation:breakd 3s linear infinite reverse; }
+  .critter.e { right:18%; animation:moon 2.5s ease-in-out infinite reverse; }
+  .critter.f { right:2%; animation:spinpop 1.9s ease-in-out infinite; }
+  @keyframes moon {
+    0% { transform:translateX(0) rotate(10deg) scaleX(-1); }
+    30% { transform:translateX(42px) rotate(-16deg) scaleX(-1); }
+    55% { transform:translateX(6px) rotate(12deg) scaleX(1); }
+    80% { transform:translateX(-34px) rotate(-14deg) scaleX(1); }
+    100% { transform:translateX(0) rotate(10deg) scaleX(-1); }
+  }
+  @keyframes breakd {
+    0%,16% { transform:rotate(0) translateY(0); }
+    42% { transform:rotate(200deg) translateY(10px); }
+    68% { transform:rotate(360deg) translateY(0); }
+    84% { transform:rotate(420deg) translateY(-6px); }
+    100% { transform:rotate(360deg); }
+  }
+  @keyframes worm {
+    0%,100% { transform:rotate(0) translateY(0); }
+    25% { transform:rotate(-78deg) translateY(12px); }
+    50% { transform:rotate(16deg) translateY(-8px); }
+    75% { transform:rotate(86deg) translateY(14px); }
+  }
+  @keyframes spinpop {
+    0%,100% { transform:rotate(0) translateY(0); }
+    28% { transform:rotate(-24deg) translateY(-20px); }
+    58% { transform:rotate(340deg) translateY(6px); }
+    78% { transform:rotate(380deg) translateY(-10px) scaleX(-1); }
   }
   h1 { margin:0; font-size:32px; font-weight:800; letter-spacing:-.03em; }
   header .sub { margin:2px 0 0; color:#f0d7a2; font-size:13px; font-weight:600; }
@@ -84,8 +106,7 @@
     .grid { grid-template-columns:1fr; }
     h1 { font-size:26px; }
     header img { width:72px; height:72px; }
-    .critter { height:84px; }
-    .critter.b,.critter.d { height:72px; }
+    .critter,.critter.b,.critter.c,.critter.d { height:62px; }
     #nowClock { font-size:32px; }
   }
 </style>
@@ -93,10 +114,12 @@
 <body>
 <canvas id="fx"></canvas>
 <div class="meadow" aria-hidden="true">
-  <img class="critter a" src="meadow-pirate.png" alt="" />
-  <img class="critter b" src="meadow-rice.png" alt="" />
-  <img class="critter c" src="meadow-wolf.png" alt="" />
-  <img class="critter d" src="meadow-banana.png" alt="" />
+  <img class="critter a" src="mate-ice.png" alt="" />
+  <img class="critter b" src="mate-knight.png" alt="" />
+  <img class="critter c" src="mate-beast.png" alt="" />
+  <img class="critter d" src="mate-dragon.png" alt="" />
+  <img class="critter e" src="mate-wolf.png" alt="" />
+  <img class="critter f" src="mate-mage.png" alt="" />
 </div>
 <div class="wrap">
   <header>
