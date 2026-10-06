@@ -13,18 +13,24 @@
   button { cursor:pointer; }
   .wrap { max-width:980px; margin:0 auto; padding:28px 18px 40px; }
   header { text-align:center; margin-bottom:18px; }
-  .kicker { color:var(--muted); letter-spacing:.18em; font-size:13px; }
   h1 { margin:8px 0 0; font-size:34px; font-weight:600; }
   nav { display:flex; gap:22px; border-bottom:1px solid var(--line); margin:22px 0 18px; }
   nav button { background:none; border:0; color:var(--muted); padding:10px 0 12px; font-size:15px; }
   nav button.active { color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink); }
   .grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; }
+  .grid.solo { grid-template-columns:1fr; }
+  .grid.solo #wheelCard { max-width:460px; margin:0 auto; }
   .card { border:1px solid var(--line); border-radius:16px; padding:16px; background:#202836; }
   label { display:block; color:var(--muted); font-size:12px; margin:12px 0 6px; }
   input,select { width:100%; background:#1b2430; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
-  .row { display:flex; gap:8px; }
+  .row { display:flex; gap:8px; align-items:center; }
   .row > * { flex:1; }
   .line { display:grid; grid-template-columns:1fr 88px auto; gap:8px; margin-bottom:8px; }
+  .reward-line { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
+  .reward-line select { flex:1 1 140px; width:auto; }
+  .reward-line input[type=number] { flex:0 0 76px; width:76px; }
+  label.inline { display:flex; align-items:center; gap:6px; margin:0; color:var(--ink); font-size:13px; width:auto; }
+  label.inline input { width:auto; }
   .btn,.ghost,.danger { border:0; border-radius:10px; padding:10px 14px; font-weight:600; }
   .btn { background:var(--accent); color:#1b2430; }
   .ghost,.danger { background:transparent; color:var(--ink); border:1px solid var(--line); }
@@ -32,6 +38,8 @@
   .btn:disabled { opacity:.4; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
   .hidden { display:none !important; }
+  #nowClock { text-align:center; font-size:28px; font-weight:600; letter-spacing:.04em; font-variant-numeric:tabular-nums; margin:0; }
+  #scheduleLine { text-align:center; margin:4px 0 14px; }
   .wheel-wrap { min-height:360px; display:grid; place-items:center; position:relative; }
   canvas#wheel { width:min(340px,78vw); height:min(340px,78vw); }
   .pointer { position:absolute; top:18px; width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-top:14px solid #f4f6f8; }
@@ -43,9 +51,10 @@
   .item { padding:12px 0; border-bottom:1px solid var(--line); }
   #fx { position:fixed; inset:0; pointer-events:none; z-index:20; }
   .modal-back { position:fixed; inset:0; background:rgba(12,16,24,.72); display:grid; place-items:center; z-index:30; }
-  .modal { width:min(380px,92vw); background:#1d2736; border:1px solid var(--line); border-radius:18px; padding:28px 22px; text-align:center; }
+  .modal { width:min(420px,92vw); background:#1d2736; border:1px solid var(--line); border-radius:18px; padding:28px 22px; text-align:center; }
   .modal h2 { margin:8px 0 12px; font-size:36px; font-weight:600; }
-  .lock { max-width:460px; margin:20px auto; }
+  #splitPeople { max-height:46vh; overflow:auto; text-align:left; margin-top:8px; }
+  #splitPeople label.inline { margin:8px 0; }
   @media (max-width:800px) { .grid { grid-template-columns:1fr; } }
 </style>
 </head>
@@ -57,40 +66,53 @@
   </header>
   <nav id="nav">
     <button type="button" data-view="roulette" id="tabRoulette">룰렛</button>
-    <button type="button" data-view="history" class="active">기록</button>
+    <button type="button" data-view="history">기록</button>
     <button type="button" data-view="members">길드원</button>
     <button type="button" data-view="dps">딜량</button>
     <button type="button" data-view="settings" id="tabSettings">설정</button>
   </nav>
   <p class="muted" id="roleNote"></p>
-  <section id="view-roulette" class="grid">
-    <div class="card" id="setupCard">
-      <label>보스명</label><select id="boss"></select>
-      <label>보상</label><select id="reward"></select>
-      <label>잡은 날짜</label><input id="caughtDate" type="date" />
-      <label>룰렛 실행 날짜</label><input id="runDate" type="date" />
-      <label>룰렛 실행 시각</label>
-      <div class="row"><select id="runHour"></select><select id="runMinute"></select></div>
-      <p class="muted">잡은 날짜는 보스를 잡은 날입니다. 룰렛 실행은 돌아가는 날짜와 시, 분입니다.</p>
-      <label>수량</label><input id="qty" type="number" min="1" value="1" />
-      <label>참여자 · 기여도</label>
-      <div id="people"></div>
-      <div class="actions">
-        <button type="button" class="ghost" id="addPerson">참가자 추가</button>
-        <button type="button" class="ghost" id="addAll">길드원 전체</button>
-        <button type="button" class="btn" id="buildBtn">설정완료</button>
+  <section id="view-roulette">
+    <div id="nowClock">--:--:--</div>
+    <p id="scheduleLine" class="muted"></p>
+    <div class="grid solo" id="rouletteGrid">
+      <div class="card hidden" id="setupCard">
+        <label>보스명</label><select id="boss"></select>
+        <label>보상 · 수량</label>
+        <div id="rewardRows"></div>
+        <button type="button" class="ghost" id="addRewardRow">보상 추가</button>
+        <p class="muted">균등분배를 끄면 룰렛 당첨자가 그 보상을 가져갑니다. 켜면 고른 인원에게 나눕니다.</p>
+        <label>잡은 날짜</label><input id="caughtDate" type="date" />
+        <label>룰렛 실행 날짜</label><input id="runDate" type="date" />
+        <label>룰렛 실행 시각</label>
+        <div class="row"><select id="runHour"></select><select id="runMinute"></select></div>
+        <p class="muted">잡은 날짜는 보스를 잡은 날입니다. 실행 시각이 되면 룰렛이 바로 돌아갑니다.</p>
+        <label>참여자 · 기여도</label>
+        <div id="people"></div>
+        <div class="actions">
+          <button type="button" class="ghost" id="addPerson">참가자 추가</button>
+          <button type="button" class="ghost" id="addAll">길드원 전체</button>
+          <button type="button" class="btn" id="buildBtn">설정완료</button>
+          <button type="button" class="ghost" id="cancelSetup">닫기</button>
+        </div>
+        <div id="preview"></div>
       </div>
-      <div id="preview"></div>
-    </div>
-    <div class="card">
-      <div id="spinInfo" class="muted" style="text-align:center">대기 중인 룰렛이 없습니다.</div>
-      <div class="wheel-wrap"><div class="pointer"></div><canvas id="wheel" width="800" height="800"></canvas></div>
-      <p class="muted" id="wheelHint" style="text-align:center">시작 시간이 되면 룰렛이 돌아갑니다.</p>
+      <div class="card" id="wheelCard">
+        <div id="leadBar" class="actions hidden" style="margin-top:0;justify-content:center">
+          <button type="button" class="btn" id="addRoulette">룰렛 추가</button>
+        </div>
+        <div id="spinInfo" class="muted" style="text-align:center">대기 중인 룰렛이 없습니다.</div>
+        <div class="wheel-wrap"><div class="pointer"></div><canvas id="wheel" width="800" height="800"></canvas></div>
+        <p class="muted" id="wheelHint" style="text-align:center">예정된 룰렛이 없습니다.</p>
+      </div>
     </div>
   </section>
   <section id="view-history" class="card hidden"><input id="q" placeholder="검색" /><div id="history"></div></section>
   <section id="view-members" class="card hidden"><div id="memberView"></div></section>
   <section id="view-dps" class="card hidden">
+    <label>층</label>
+    <div id="dpsFloors" class="actions"></div>
+    <p class="muted">1층은 일반 보스(해적·고양이·음식·늑대), 2층은 바나냥·루나·루니·루이입니다.</p>
     <label>보스</label>
     <div id="dpsCats" class="actions"></div>
     <p class="muted">보스를 고른 뒤 길드원 이름 옆 1분 딜량을 적고 확인을 누르세요. 날짜는 없습니다.</p>
@@ -106,8 +128,18 @@
         <label>길드명</label>
         <div class="row"><input id="guildName" /><button type="button" class="btn" id="saveGuild">변경</button></div>
         <label>보스 목록</label>
-        <div class="row"><input id="newBoss" placeholder="보스 이름" /><button type="button" class="ghost" id="addBoss">추가</button></div>
+        <div class="row">
+          <input id="newBoss" placeholder="보스 이름" />
+          <select id="newBossFloor">
+            <option value="0">격전지(하층)</option>
+            <option value="1" selected>격전지(1층)</option>
+            <option value="2">격전지(2층)</option>
+            <option value="3">격전지(3층)</option>
+          </select>
+          <button type="button" class="ghost" id="addBoss">추가</button>
+        </div>
         <div id="bossList"></div>
+        <p class="muted">층을 바꾸면 딜량 탭의 그 층에 들어갑니다.</p>
         <label>길마 · 부길마</label>
         <div class="row"><select id="leaderPick"></select><select id="vicePick"></select><select id="vicePick2"></select></div>
         <div class="actions"><button type="button" class="btn" id="saveRoles">직책 저장</button></div>
@@ -137,108 +169,781 @@
   </section>
 </div>
 <div id="modal" class="modal-back hidden">
-  <div class="modal"><div class="muted">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="closeModal">확인</button></div></div>
+  <div class="modal"><div class="muted" id="winKicker">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="closeModal">확인</button></div></div>
+</div>
+<div id="splitModal" class="modal-back hidden">
+  <div class="modal" style="text-align:left">
+    <div class="muted">균등 분배</div>
+    <p class="muted">체크한 인원에게 수량을 똑같이 나눕니다. 딱 떨어지지 않으면 남은 개는 그 인원 중 랜덤으로 1개씩 더 갑니다.</p>
+    <div id="splitPeople"></div>
+    <div class="actions">
+      <button type="button" class="ghost" id="splitCancel">취소</button>
+      <button type="button" class="btn" id="splitOk">확인</button>
+    </div>
+  </div>
 </div>
 <script>
 const KEY = "guild-boss-ledger-v3";
 const COLORS = ["#5b7c99","#3f8f86","#d08a3a","#8a6bb5","#c46b5a","#6d8f5a","#4f7ea8","#b08968"];
+const FLOORS = [
+  {id:"0", label:"격전지(하층)"},
+  {id:"1", label:"격전지(1층)"},
+  {id:"2", label:"격전지(2층)"},
+  {id:"3", label:"격전지(3층)"}
+];
 const state = load();
-let people = [], ready = null, rotation = 0, spinning = false, pushing = false, dpsBossName = "";
+let people = [];
+let rewardDraft = [{name:"", qty:1, even:false, recipients:[]}];
+let splitIndex = -1;
+let splitNames = [];
+let ready = null;
+let rotation = 0;
+let spinning = false;
+let pushing = false;
+let dpsBossName = "";
+let dpsFloor = "1";
 const params = new URLSearchParams(location.search);
 const leadMode = params.get("mode") === "lead";
 const queryDb = params.get("db") || "";
 const queryRoom = params.get("room") || "";
-function load(){ try { const s = JSON.parse(localStorage.getItem(KEY)||"null"); if(s&&s.members&&s.bosses) return s; } catch(e){} return { guild:"우리 길드", members:[], bosses:["악몽 보스"], rewards:[], history:[], dps:[], dpsByBoss:{}, firebaseUrl:"https://cathero-91241-default-rtdb.asia-southeast1.firebasedatabase.app", room:"guild", rev:1 }; }
-if(!state.rewards) state.rewards=[];
-if(!state.dpsByBoss) state.dpsByBoss={};
+function load(){
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY)||"null");
+    if (s && s.members && s.bosses) return s;
+  } catch (e) {}
+  return { guild:"우리 길드", members:[], bosses:["악몽 보스"], rewards:[], history:[], dps:[], dpsByBoss:{}, bossFloors:{}, firebaseUrl:"https://cathero-91241-default-rtdb.asia-southeast1.firebasedatabase.app", room:"guild", rev:1 };
+}
+if (!state.rewards) state.rewards = [];
+if (!state.dpsByBoss) state.dpsByBoss = {};
+if (!state.bossFloors) state.bossFloors = {};
+if (!state.history) state.history = [];
 if (queryDb) state.firebaseUrl = queryDb;
 if (queryRoom) state.room = queryRoom;
-function payload(){ return { guild:state.guild, members:state.members, bosses:state.bosses, rewards:state.rewards||[], leader:state.leader||"", vice:state.vice||"", vice2:state.vice2||"", history:state.history, dps:state.dps, dpsByBoss:state.dpsByBoss||{}, schedule:state.schedule||null, firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1 }; }
-function save(){ state.rev=(state.rev||1)+1; state.updatedAt=Date.now(); localStorage.setItem(KEY, JSON.stringify(state)); document.getElementById("title").textContent=state.guild||"우리 길드"; pushCloud(); }
-function cloudUrl(){ const base=(state.firebaseUrl||"").trim().replace(/\/+$/,""); const room=(state.room||"guild").replace(/[.#$\[\]]/g,"-"); return base ? base+"/guild-ledger/"+encodeURIComponent(room)+".json" : ""; }
-async function pushCloud(){ const url=cloudUrl(); if(!url||pushing) return; pushing=true; try { await fetch(url,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload())}); } catch(e){} pushing=false; }
-async function pullCloud(){ const url=cloudUrl(); if(!url||spinning) return; try { const res=await fetch(url); if(!res.ok) return; const remote=await res.json(); if(!remote||!remote.members||(remote.rev||0)<=(state.rev||0)) return; Object.assign(state,remote); localStorage.setItem(KEY, JSON.stringify(state)); fillSelects(); renderPeople(); renderHistory(); renderMemberView(); renderDps(); showSchedule(); } catch(e){} }
+function payload(){
+  return {
+    guild:state.guild, members:state.members, bosses:state.bosses, rewards:state.rewards||[],
+    leader:state.leader||"", vice:state.vice||"", vice2:state.vice2||"",
+    history:state.history, dps:state.dps, dpsByBoss:state.dpsByBoss||{}, bossFloors:state.bossFloors||{},
+    schedule:state.schedule||null, firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1
+  };
+}
+function save(){
+  state.rev = (state.rev||1) + 1;
+  state.updatedAt = Date.now();
+  localStorage.setItem(KEY, JSON.stringify(state));
+  document.getElementById("title").textContent = state.guild || "우리 길드";
+  pushCloud();
+}
+function cloudUrl(){
+  const base = (state.firebaseUrl||"").trim().replace(/\/+$/,"");
+  const room = (state.room||"guild").replace(/[.#$\[\]]/g,"-");
+  return base ? base + "/guild-ledger/" + encodeURIComponent(room) + ".json" : "";
+}
+async function pushCloud(){
+  const url = cloudUrl();
+  if (!url || pushing) return;
+  pushing = true;
+  try { await fetch(url, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload())}); }
+  catch (e) {}
+  pushing = false;
+}
+async function pullCloud(){
+  const url = cloudUrl();
+  if (!url || spinning) return;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const remote = await res.json();
+    if (!remote || !remote.members || (remote.rev||0) <= (state.rev||0)) return;
+    Object.assign(state, remote);
+    if (!state.rewards) state.rewards = [];
+    if (!state.dpsByBoss) state.dpsByBoss = {};
+    if (!state.bossFloors) state.bossFloors = {};
+    if (!state.history) state.history = [];
+    localStorage.setItem(KEY, JSON.stringify(state));
+    adoptSchedule();
+    fillSelects();
+    renderPeople();
+    renderHistory();
+    renderMemberView();
+    renderDps();
+    showSchedule();
+    trySpin();
+  } catch (e) {}
+}
 function uid(){ return Math.random().toString(36).slice(2,10); }
-function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({"&":"\u0026amp;","<":"\u0026lt;",">":"\u0026gt;",'"':"\u0026#34;","'":"\u0026#39;"})[c]); }
-document.getElementById("caughtDate").value=today();
-document.getElementById("runDate").value=today();
-function fillClock(){ const h=document.getElementById("runHour"), m=document.getElementById("runMinute"); if(!h.options.length){ for(let i=0;i<24;i++){ const o=document.createElement("option"); o.value=String(i).padStart(2,"0"); o.textContent=o.value+"시"; h.appendChild(o);} for(let i=0;i<60;i++){ const o=document.createElement("option"); o.value=String(i).padStart(2,"0"); o.textContent=o.value+"분"; m.appendChild(o);} } const n=new Date(); h.value=String(n.getHours()).padStart(2,"0"); m.value=String(n.getMinutes()).padStart(2,"0"); }
+function pad(n){ return String(n).padStart(2,"0"); }
+function today(){ const d = new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function esc(s){
+  return String(s??"").replace(/[&<>"']/g, c => ({"&":"\u0026amp;","<":"\u0026lt;",">":"\u0026gt;",'"':"\u0026#34;","'":"\u0026#39;"})[c]);
+}
+function fmt(ts){
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes());
+}
+function fmtFull(ts){
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  return fmt(ts)+":"+pad(d.getSeconds());
+}
+function guessFloor(name){
+  const n = String(name||"");
+  if (/바나냥|루나|루니|루이/.test(n)) return "2";
+  if (/해적|고양이|음식|늑대/.test(n)) return "1";
+  if (/하층/.test(n)) return "0";
+  if (/3층/.test(n)) return "3";
+  if (/2층/.test(n)) return "2";
+  if (/1층/.test(n)) return "1";
+  return "1";
+}
+function floorOf(name){
+  if (state.bossFloors && state.bossFloors[name]) return String(state.bossFloors[name]);
+  return guessFloor(name);
+}
+function floorLabel(id){
+  const f = FLOORS.find(x => x.id === String(id));
+  return f ? f.label : "격전지(1층)";
+}
+document.getElementById("caughtDate").value = today();
+document.getElementById("runDate").value = today();
+function fillClock(){
+  const h = document.getElementById("runHour");
+  const m = document.getElementById("runMinute");
+  if (!h.options.length) {
+    for (let i = 0; i < 24; i++) {
+      const o = document.createElement("option");
+      o.value = pad(i); o.textContent = o.value + "시"; h.appendChild(o);
+    }
+    for (let i = 0; i < 60; i++) {
+      const o = document.createElement("option");
+      o.value = pad(i); o.textContent = o.value + "분"; m.appendChild(o);
+    }
+  }
+  const n = new Date();
+  h.value = pad(n.getHours());
+  m.value = pad(n.getMinutes());
+}
 fillClock();
 function applyRole(){
   document.getElementById("tabSettings").classList.toggle("hidden", !leadMode);
-  document.getElementById("setupCard").classList.toggle("hidden", !leadMode);
-  document.getElementById("roleNote").textContent = leadMode ? "운영 화면 · 보스, 아이템, 시작 시간을 정합니다." : "길드원 화면 · 정한 시간이 되면 룰렛이 돌아갑니다.";
+  document.getElementById("leadBar").classList.toggle("hidden", !leadMode);
+  hideSetup();
+  document.getElementById("roleNote").textContent = leadMode
+    ? "운영 화면 · 룰렛 추가로 시각을 정합니다. 그 시각이 되면 바로 돌아갑니다."
+    : "길드원 화면 · 정한 시각이 되면 룰렛이 돌아갑니다.";
   show("roulette");
 }
-function show(view){ document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active", b.dataset.view===view)); ["roulette","history","members","dps","settings"].forEach(id=>document.getElementById("view-"+id).classList.toggle("hidden", id!==view)); if(view==="history") renderHistory(); if(view==="members") renderMemberView(); if(view==="dps") renderDps(); if(view==="settings") renderSettings(); }
-document.getElementById("nav").onclick=e=>{ const b=e.target.closest("button[data-view]"); if(b) show(b.dataset.view); };
-function options(list, selected){ return list.length? list.map(n=>"<option"+(n===selected?" selected":"")+">"+esc(n)+"</option>").join("") : "<option value=''>설정에서 추가</option>"; }
-function fillSelects(){ const boss=document.getElementById("boss").value, reward=document.getElementById("reward").value; document.getElementById("boss").innerHTML=options(state.bosses,boss); document.getElementById("reward").innerHTML=options(state.rewards||[], reward); document.getElementById("title").textContent=state.guild||"우리 길드"; }
-function remainingMembers(){ const used=new Set(people.map(p=>p.name)); return state.members.filter(m=>!used.has(m)); }
+function hideSetup(){
+  document.getElementById("setupCard").classList.add("hidden");
+  document.getElementById("rouletteGrid").classList.add("solo");
+}
+function showSetup(){
+  document.getElementById("setupCard").classList.remove("hidden");
+  document.getElementById("rouletteGrid").classList.remove("solo");
+  renderRewardRows();
+  renderPeople();
+}
+function show(view){
+  document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
+  ["roulette","history","members","dps","settings"].forEach(id => {
+    document.getElementById("view-"+id).classList.toggle("hidden", id !== view);
+  });
+  if (view === "history") renderHistory();
+  if (view === "members") renderMemberView();
+  if (view === "dps") renderDps();
+  if (view === "settings") renderSettings();
+}
+document.getElementById("nav").onclick = e => {
+  const b = e.target.closest("button[data-view]");
+  if (b) show(b.dataset.view);
+};
+function options(list, selected){
+  return list.length
+    ? list.map(n => "<option"+(n===selected?" selected":"")+">"+esc(n)+"</option>").join("")
+    : "<option value=''>설정에서 추가</option>";
+}
+function fillSelects(){
+  const boss = document.getElementById("boss").value;
+  document.getElementById("boss").innerHTML = options(state.bosses, boss);
+  document.getElementById("title").textContent = state.guild || "우리 길드";
+}
+function remainingMembers(){
+  const used = new Set(people.map(p => p.name));
+  return state.members.filter(m => !used.has(m));
+}
 function renderPeople(){
-  document.getElementById("people").innerHTML=people.map((p,i)=>'<div class="line"><select data-i="'+i+'">'+state.members.filter(m=>m===p.name||!people.some(x=>x.name===m)).map(m=>'<option'+(m===p.name?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select><input data-i="'+i+'" data-k="score" type="number" min="0" value="'+p.score+'"><button type="button" class="danger" data-del="'+i+'">삭제</button></div>').join('') || '<p class="muted">참가자를 추가하세요.</p>';
-  document.querySelectorAll('#people select').forEach(el=>el.onchange=()=>{ people[el.dataset.i].name=el.value; ready=null; renderPeople(); });
-  document.querySelectorAll('#people input').forEach(el=>el.oninput=()=>{ people[el.dataset.i].score=el.value; ready=null; draw(); preview(); });
-  document.querySelectorAll('#people [data-del]').forEach(el=>el.onclick=()=>{ people.splice(Number(el.dataset.del),1); ready=null; renderPeople(); });
-  preview(); draw();
+  document.getElementById("people").innerHTML = people.map((p,i) => {
+    const names = state.members.filter(m => m === p.name || !people.some(x => x.name === m));
+    return '<div class="line"><select data-i="'+i+'">'+names.map(m => '<option'+(m===p.name?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select><input data-i="'+i+'" type="number" min="0" value="'+p.score+'"><button type="button" class="danger" data-del="'+i+'">삭제</button></div>';
+  }).join("") || '<p class="muted">참가자를 추가하세요.</p>';
+  document.querySelectorAll("#people select").forEach(el => el.onchange = () => { people[el.dataset.i].name = el.value; renderPeople(); });
+  document.querySelectorAll("#people input").forEach(el => el.oninput = () => { people[el.dataset.i].score = el.value; draw(); preview(); });
+  document.querySelectorAll("#people [data-del]").forEach(el => el.onclick = () => { people.splice(Number(el.dataset.del),1); renderPeople(); });
+  preview();
+  if (!spinning) draw();
 }
-function active(){ return people.map(p=>({name:String(p.name||"").trim(), score:Number(p.score)||0})).filter(p=>p.name&&p.score>0); }
-function preview(){ const list=active(), total=list.reduce((s,p)=>s+p.score,0); document.getElementById("preview").innerHTML=list.map(p=>{ const pct=total?p.score/total*100:0; return '<div style="margin-top:8px"><div class="muted">'+esc(p.name)+" · "+p.score+" · "+pct.toFixed(1)+'%</div><div class="bar"><span style="width:'+pct+'%"></span></div></div>'; }).join(""); }
-function draw(){ const canvas=document.getElementById("wheel"), ctx=canvas.getContext("2d"), list=ready||active(), total=list.reduce((s,p)=>s+p.score,0)||1; ctx.clearRect(0,0,800,800); ctx.save(); ctx.translate(400,400); ctx.rotate(rotation); let angle=-Math.PI/2; if(!list.length){ ctx.beginPath(); ctx.arc(0,0,300,0,Math.PI*2); ctx.fillStyle="#2a3444"; ctx.fill(); } list.forEach((p,i)=>{ const slice=p.score/total*Math.PI*2; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,300,angle,angle+slice); ctx.closePath(); ctx.fillStyle=COLORS[i%COLORS.length]; ctx.fill(); if(slice>0.25){ ctx.save(); ctx.rotate(angle+slice/2); ctx.fillStyle="#f4f6f8"; ctx.font="24px IBM Plex Sans KR, sans-serif"; ctx.textAlign="right"; ctx.fillText(p.name,260,8); ctx.restore(); } angle+=slice; }); ctx.beginPath(); ctx.arc(0,0,70,0,Math.PI*2); ctx.fillStyle="#1b2430"; ctx.fill(); ctx.restore(); }
-function fmt(ts){ const d=new Date(ts); if(Number.isNaN(d.getTime())) return ""; return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
-function showSchedule(){ const s=state.schedule; ready=s&&s.entries?s.entries:null; const info=document.getElementById("spinInfo"); if(!s){ info.textContent="대기 중인 룰렛이 없습니다."; document.getElementById("wheelHint").textContent="시작 시간이 되면 룰렛이 돌아갑니다."; draw(); return; } info.innerHTML=esc(s.boss)+" · "+esc(s.reward)+" x"+(s.qty||1)+"<br>시작 "+fmt(s.startAt); document.getElementById("wheelHint").textContent=s.done?"종료된 룰렛입니다.":"시작 시간이 되면 자동으로 돌아갑니다."; draw(); }
-function build(){ const list=active(); const caught=document.getElementById("caughtDate").value; const runDate=document.getElementById("runDate").value; const hh=document.getElementById("runHour").value; const mm=document.getElementById("runMinute").value; const when=new Date(runDate+"T"+hh+":"+mm+":00").getTime(); if(!document.getElementById("boss").value) return alert("보스를 고르세요."); if(!document.getElementById("reward").value) return alert("설정에서 보상을 추가하세요."); if(!caught) return alert("잡은 날짜를 고르세요."); if(!runDate||!hh||!mm||!when) return alert("룰렛 실행 날짜와 시, 분을 고르세요."); if(!list.length) return alert("기여도가 있는 참가자가 필요합니다."); const winner=pick(list); const item={id:uid(), date:caught, startAt:when, boss:document.getElementById("boss").value, reward:document.getElementById("reward").value.trim(), qty:Number(document.getElementById("qty").value)||1, entries:list, winner:winner.name, score:winner.score, total:list.reduce((s,p)=>s+p.score,0), pending:true}; state.history.unshift(item); state.schedule=item; save(); showSchedule(); renderHistory(); alert("기록에 넣어 두었습니다. 결과확인을 누르면 룰렛이 돌아갑니다."); }
-function pick(list){ let t=Math.random()*list.reduce((s,p)=>s+p.score,0); for(const p of list){ t-=p.score; if(t<=0) return p; } return list.at(-1); }
-function destination(list,winnerName){ const total=list.reduce((s,p)=>s+p.score,0); let start=-Math.PI/2; for(const p of list){ const slice=p.score/total*Math.PI*2; if(p.name===winnerName){ const land=start+slice*0.5; const current=((rotation%(Math.PI*2))+Math.PI*2)%(Math.PI*2); const want=((-Math.PI/2-land)%(Math.PI*2)+Math.PI*2)%(Math.PI*2); return rotation+6*Math.PI*2+(want-current+Math.PI*2)%(Math.PI*2); } start+=slice; } return rotation; }
-function finishSchedule(){ const s=state.schedule; const row=state.history.find(h=>h.id===s.id); if(row){ row.pending=false; row.ratio=s.score/s.total*100; } s.done=true; s.pending=false; save(); renderHistory(); }
-function startScheduled(){ const s=state.schedule; if(!s||s.done||s.pending===false||spinning) return; spinning=true; ready=s.entries; const dest=destination(s.entries,s.winner), from=rotation, t0=performance.now(); const step=now=>{ const t=Math.min(1,(now-t0)/4200); rotation=from+(dest-from)*(1-Math.pow(1-t,4)); draw(); if(t<1) requestAnimationFrame(step); else { spinning=false; finishSchedule(); fireworks(); document.getElementById("winName").textContent=s.winner; document.getElementById("winDetail").innerHTML=esc(s.boss)+" · "+esc(s.reward)+" x"+s.qty+"<br>기여도 "+(s.score/s.total*100).toFixed(1)+"%"; document.getElementById("modal").classList.remove("hidden"); showSchedule(); } }; requestAnimationFrame(step); }
-document.getElementById("buildBtn").onclick=build;
-document.getElementById("addPerson").onclick=()=>{ const left=remainingMembers(); if(!left.length) return alert("추가할 길드원이 없습니다. 설정에서 등록하세요."); people.push({name:left[0],score:1}); ready=null; renderPeople(); };
-document.getElementById("addAll").onclick=()=>{ if(!state.members.length) return alert("설정에서 길드원을 추가하세요."); people=state.members.map(name=>({name,score:1})); ready=null; renderPeople(); };
-document.getElementById("closeModal").onclick=()=>document.getElementById("modal").classList.add("hidden");
-function renderHistory(){ const q=document.getElementById("q").value.trim().toLowerCase(); const rows=state.history.filter(h=>((h.boss||"")+(h.reward||"")+(h.winner||"")).toLowerCase().includes(q)); document.getElementById("history").innerHTML=rows.length?rows.map(h=>h.pending?'<article class="item"><strong>'+esc(h.boss)+"</strong> · "+esc(h.reward)+" x"+h.qty+"<br>잡은 날 "+esc(h.date)+" · 시작 "+fmt(h.startAt)+'<div class="actions"><button type="button" class="btn" data-confirm="'+h.id+'">결과확인</button></div></article>':'<article class="item"><strong>'+esc(h.winner)+"</strong> · "+Number(h.ratio||0).toFixed(1)+"%"+"<br>잡은 날 "+esc(h.date)+" · "+esc(h.boss)+" · "+esc(h.reward)+" x"+h.qty+"</article>").join(""):"<p class='muted'>기록이 없습니다.</p>"; document.querySelectorAll("[data-confirm]").forEach(el=>el.onclick=()=>confirmResult(el.dataset.confirm)); }
-function confirmResult(id){ const row=state.history.find(h=>h.id===id); if(!row||!row.pending||spinning) return; if(Date.now()<row.startAt) return alert("룰렛 시작 날짜 이후에 확인할 수 있습니다."); state.schedule=row; show("roulette"); showSchedule(); startScheduled(); }
-document.getElementById("q").oninput=renderHistory;
-function roleOf(name){ const roles=[]; if(name&&name===state.leader) roles.push("길마"); if(name&&(name===state.vice||name===state.vice2)) roles.push("부길마"); return roles.length?roles.join(" · "):"길드원"; }
-function renderMemberView(){ document.getElementById("memberView").innerHTML=state.members.length?"<table><tr><td class=\"muted\">#</td><td class=\"muted\">이름</td><td class=\"muted\">직책</td></tr>"+state.members.map((m,i)=>"<tr><td>"+(i+1)+"</td><td>"+esc(m)+"</td><td>"+esc(roleOf(m))+"</td></tr>").join("")+"</table>":"<p class='muted'>설정에서 길드원을 추가하세요.</p>"; }
-function savedDps(boss){ const map=state.dpsByBoss||{}; if(map[boss]) return map[boss]; const old=(state.dps||[]).find(d=>d.boss===boss); return old?old.entries:[]; }
+function active(){
+  return people.map(p => ({name:String(p.name||"").trim(), score:Number(p.score)||0})).filter(p => p.name && p.score > 0);
+}
+function preview(){
+  const list = active();
+  const total = list.reduce((s,p) => s+p.score, 0);
+  document.getElementById("preview").innerHTML = list.map(p => {
+    const pct = total ? p.score/total*100 : 0;
+    return '<div style="margin-top:8px"><div class="muted">'+esc(p.name)+" · "+p.score+" · "+pct.toFixed(1)+'%</div><div class="bar"><span style="width:'+pct+'%"></span></div></div>';
+  }).join("");
+}
+function draw(){
+  const canvas = document.getElementById("wheel");
+  const ctx = canvas.getContext("2d");
+  const setupOpen = !document.getElementById("setupCard").classList.contains("hidden");
+  const list = (!spinning && setupOpen) ? active() : (ready || []);
+  const total = list.reduce((s,p) => s+p.score, 0) || 1;
+  ctx.clearRect(0,0,800,800);
+  ctx.save();
+  ctx.translate(400,400);
+  ctx.rotate(rotation);
+  let angle = -Math.PI/2;
+  if (!list.length) {
+    ctx.beginPath(); ctx.arc(0,0,300,0,Math.PI*2); ctx.fillStyle = "#2a3444"; ctx.fill();
+  }
+  list.forEach((p,i) => {
+    const slice = p.score/total*Math.PI*2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,300,angle,angle+slice); ctx.closePath();
+    ctx.fillStyle = COLORS[i%COLORS.length]; ctx.fill();
+    if (slice > 0.25) {
+      ctx.save(); ctx.rotate(angle+slice/2); ctx.fillStyle = "#f4f6f8";
+      ctx.font = "24px IBM Plex Sans KR, sans-serif"; ctx.textAlign = "right";
+      ctx.fillText(p.name, 260, 8); ctx.restore();
+    }
+    angle += slice;
+  });
+  ctx.beginPath(); ctx.arc(0,0,70,0,Math.PI*2); ctx.fillStyle = "#1b2430"; ctx.fill();
+  ctx.restore();
+}
+function normalizeRewards(item){
+  if (!item) return [];
+  if (item.rewards && item.rewards.length && typeof item.rewards[0] === "object") return item.rewards;
+  if (item.reward) return [{name:item.reward, qty:item.qty||1, even:false, recipients:[], split:[]}];
+  return [];
+}
+function rewardLines(item, detailed){
+  const list = normalizeRewards(item);
+  if (!list.length) return "";
+  return list.map(r => {
+    if (r.even && detailed && r.split && r.split.length) {
+      return esc(r.name)+" x"+r.qty+" · "+r.split.map(s => esc(s.name)+" "+s.qty).join(", ");
+    }
+    if (r.even) return esc(r.name)+" x"+r.qty+" · 균등분배";
+    return esc(r.name)+" x"+r.qty+(detailed ? " · 당첨자" : "");
+  }).join("<br>");
+}
+function renderRewardRows(){
+  const box = document.getElementById("rewardRows");
+  box.innerHTML = rewardDraft.map((r,i) => {
+    const names = (state.rewards||[]).slice();
+    if (r.name && !names.includes(r.name)) names.unshift(r.name);
+    const opts = names.length
+      ? names.map(n => "<option"+(n===r.name?" selected":"")+">"+esc(n)+"</option>").join("")
+      : "<option value=''>설정에서 보상 추가</option>";
+    const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
+    return '<div class="reward-line"><select data-rw="'+i+'">'+opts+'</select><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type=\'button\' class=\'danger\' data-rd=\'"+i+"\'>삭제</button></div>"+note;
+  }).join("");
+  box.querySelectorAll("[data-rw]").forEach(el => el.onchange = () => { rewardDraft[el.dataset.rw].name = el.value; });
+  box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => { rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
+  box.querySelectorAll("[data-re]").forEach(el => el.onchange = () => {
+    const i = Number(el.dataset.re);
+    if (el.checked) openSplit(i);
+    else { rewardDraft[i].even = false; rewardDraft[i].recipients = []; renderRewardRows(); }
+  });
+  box.querySelectorAll("[data-rd]").forEach(el => el.onclick = () => {
+    rewardDraft.splice(Number(el.dataset.rd), 1);
+    if (!rewardDraft.length) rewardDraft.push({name:"", qty:1, even:false, recipients:[]});
+    renderRewardRows();
+  });
+}
+function openSplit(i){
+  const seen = new Set();
+  splitNames = [];
+  people.forEach(p => {
+    const n = String(p.name||"").trim();
+    if (n && !seen.has(n)) { seen.add(n); splitNames.push(n); }
+  });
+  if (!splitNames.length) {
+    rewardDraft[i].even = false;
+    renderRewardRows();
+    alert("참가자를 먼저 추가하세요.");
+    return;
+  }
+  splitIndex = i;
+  const selected = new Set(rewardDraft[i].recipients || []);
+  document.getElementById("splitPeople").innerHTML = splitNames.map((n,idx) =>
+    '<label class="inline"><input type="checkbox" data-split-i="'+idx+'"'+(selected.has(n)?" checked":"")+">"+esc(n)+"</label>"
+  ).join("");
+  document.getElementById("splitModal").classList.remove("hidden");
+}
+document.getElementById("splitOk").onclick = () => {
+  const checked = [...document.querySelectorAll("#splitPeople input:checked")].map(el => splitNames[Number(el.dataset.splitI)]).filter(Boolean);
+  if (!checked.length) return alert("한 명 이상 체크하세요.");
+  if (splitIndex < 0) return;
+  rewardDraft[splitIndex].even = true;
+  rewardDraft[splitIndex].recipients = checked;
+  document.getElementById("splitModal").classList.add("hidden");
+  renderRewardRows();
+};
+document.getElementById("splitCancel").onclick = () => {
+  if (splitIndex >= 0 && rewardDraft[splitIndex]) {
+    rewardDraft[splitIndex].even = false;
+    rewardDraft[splitIndex].recipients = [];
+  }
+  document.getElementById("splitModal").classList.add("hidden");
+  renderRewardRows();
+};
+document.getElementById("addRewardRow").onclick = () => {
+  rewardDraft.push({name:(state.rewards||[])[0]||"", qty:1, even:false, recipients:[]});
+  renderRewardRows();
+};
+function syncRewardDraft(){
+  document.querySelectorAll("[data-rw]").forEach(el => { if (rewardDraft[el.dataset.rw]) rewardDraft[el.dataset.rw].name = el.value; });
+  document.querySelectorAll("[data-rq]").forEach(el => { if (rewardDraft[el.dataset.rq]) rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
+}
+function splitEven(qty, names){
+  const list = names.filter(Boolean);
+  const q = Math.floor(Number(qty)||0);
+  if (!list.length || q <= 0) return [];
+  const base = Math.floor(q / list.length);
+  let rem = q % list.length;
+  const rows = list.map(name => ({name, qty:base}));
+  const order = list.map(name => ({name, k:Math.random()})).sort((a,b) => a.k-b.k);
+  for (let i = 0; i < rem; i++) {
+    const row = rows.find(r => r.name === order[i].name);
+    if (row) row.qty += 1;
+  }
+  return rows.filter(r => r.qty > 0);
+}
+function showSchedule(){
+  const s = state.schedule;
+  ready = s && s.entries ? s.entries : null;
+  const info = document.getElementById("spinInfo");
+  const hint = document.getElementById("wheelHint");
+  if (!s) {
+    info.textContent = "대기 중인 룰렛이 없습니다.";
+    hint.textContent = leadMode ? "룰렛 추가로 시간을 정하세요." : "예정된 룰렛이 없습니다.";
+    if (!spinning) draw();
+    return;
+  }
+  if (s.done) {
+    info.textContent = "이번 룰렛은 끝났습니다.";
+    hint.textContent = "못 본 결과는 기록에서 룰렛 돌리기로 다시 봅니다.";
+    if (!spinning) draw();
+    return;
+  }
+  info.innerHTML = esc(s.boss)+"<br>"+rewardLines(s, false);
+  hint.textContent = fmt(s.startAt)+"에 바로 돌아갑니다.";
+  if (!spinning) draw();
+}
+function recorded(id){
+  return state.history.some(h => h && h.id === id && !h.pending && h.winner);
+}
+function adoptSchedule(){
+  if (!state.schedule) {
+    const p = state.history.find(h => h && h.pending && h.winner);
+    if (p) state.schedule = p;
+  }
+  if (state.schedule && recorded(state.schedule.id)) state.schedule.done = true;
+}
+function pick(list){
+  let t = Math.random()*list.reduce((s,p) => s+p.score, 0);
+  for (const p of list) { t -= p.score; if (t <= 0) return p; }
+  return list[list.length-1];
+}
+function destination(list, winnerName){
+  const total = list.reduce((s,p) => s+p.score, 0);
+  let start = -Math.PI/2;
+  for (const p of list) {
+    const slice = p.score/total*Math.PI*2;
+    if (p.name === winnerName) {
+      const land = start + slice*0.5;
+      const current = ((rotation%(Math.PI*2))+Math.PI*2)%(Math.PI*2);
+      const want = ((-Math.PI/2-land)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);
+      return rotation + 6*Math.PI*2 + (want-current+Math.PI*2)%(Math.PI*2);
+    }
+    start += slice;
+  }
+  return rotation + 6*Math.PI*2;
+}
+function animateTo(list, winnerName, onDone){
+  if (!list || !list.length || spinning) return;
+  spinning = true;
+  ready = list;
+  const dest = destination(list, winnerName);
+  const from = rotation;
+  const t0 = performance.now();
+  const step = now => {
+    const t = Math.min(1, (now-t0)/4200);
+    rotation = from + (dest-from)*(1-Math.pow(1-t,4));
+    draw();
+    if (t < 1) requestAnimationFrame(step);
+    else { spinning = false; onDone(); }
+  };
+  requestAnimationFrame(step);
+}
+function showWinner(s, replay){
+  fireworks();
+  document.getElementById("winKicker").textContent = replay ? "다시보기" : "당첨";
+  document.getElementById("winName").textContent = s.winner;
+  const ratio = s.total ? (s.score/s.total*100).toFixed(1) : "0.0";
+  document.getElementById("winDetail").innerHTML = esc(s.boss)+"<br>"+rewardLines(s, true)+"<br>기여도 "+ratio+"%";
+  document.getElementById("modal").classList.remove("hidden");
+}
+function finishSchedule(){
+  const s = state.schedule;
+  if (!s) return;
+  const ratio = s.total ? s.score/s.total*100 : 0;
+  s.done = true;
+  s.pending = false;
+  s.ratio = ratio;
+  let row = state.history.find(h => h.id === s.id);
+  if (!row) {
+    row = Object.assign({}, s);
+    state.history.unshift(row);
+  } else {
+    Object.assign(row, {done:true, pending:false, ratio, winner:s.winner, rewards:s.rewards, entries:s.entries, boss:s.boss, score:s.score, total:s.total, date:s.date, startAt:s.startAt});
+  }
+  row.pending = false;
+  row.done = true;
+  save();
+  renderHistory();
+  showSchedule();
+  showWinner(s, false);
+}
+function trySpin(){
+  const s = state.schedule;
+  if (!s || s.done || spinning) return;
+  if (Date.now() < s.startAt) return;
+  if (!s.entries || !s.entries.length || !s.winner) { s.done = true; showSchedule(); return; }
+  if (recorded(s.id)) { s.done = true; showSchedule(); return; }
+  hideSetup();
+  document.getElementById("splitModal").classList.add("hidden");
+  show("roulette");
+  animateTo(s.entries, s.winner, finishSchedule);
+}
+function startReplay(row){
+  if (!row || spinning) return;
+  show("roulette");
+  animateTo(row.entries || [], row.winner, () => showWinner(row, true));
+}
+function prefill(s){
+  people = (s.entries||[]).map(e => ({name:e.name, score:e.score}));
+  const list = normalizeRewards(s);
+  rewardDraft = list.length ? list.map(r => ({name:r.name, qty:r.qty||1, even:!!r.even, recipients:(r.recipients||[]).slice()})) : [{name:"", qty:1, even:false, recipients:[]}];
+  document.getElementById("boss").value = s.boss || document.getElementById("boss").value;
+  document.getElementById("caughtDate").value = s.date || today();
+  const d = new Date(s.startAt);
+  if (!Number.isNaN(d.getTime())) {
+    document.getElementById("runDate").value = d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+    document.getElementById("runHour").value = pad(d.getHours());
+    document.getElementById("runMinute").value = pad(d.getMinutes());
+  }
+}
+function build(){
+  syncRewardDraft();
+  const list = active();
+  const caught = document.getElementById("caughtDate").value;
+  const runDate = document.getElementById("runDate").value;
+  const hh = document.getElementById("runHour").value;
+  const mm = document.getElementById("runMinute").value;
+  const when = new Date(runDate+"T"+hh+":"+mm+":00").getTime();
+  if (!document.getElementById("boss").value) return alert("보스를 고르세요.");
+  if (!caught) return alert("잡은 날짜를 고르세요.");
+  if (!runDate || !hh || mm === "" || !when) return alert("룰렛 실행 날짜와 시, 분을 고르세요.");
+  if (!list.length) return alert("기여도가 있는 참가자가 필요합니다.");
+  const namesIn = new Set(list.map(p => p.name));
+  const rewards = rewardDraft.map(r => ({
+    name:String(r.name||"").trim(),
+    qty:Math.floor(Number(r.qty)||0),
+    even:!!r.even,
+    recipients:(r.recipients||[]).filter(n => namesIn.has(n))
+  })).filter(r => r.name && r.qty > 0);
+  if (!rewards.length) return alert("보상을 고르고 수량을 입력하세요.");
+  for (const r of rewards) {
+    if (r.even) {
+      if (!r.recipients.length) return alert(r.name+" 균등 분배 인원을 체크하세요.");
+      r.split = splitEven(r.qty, r.recipients);
+    } else {
+      r.recipients = [];
+      r.split = [];
+    }
+  }
+  const total = list.reduce((s,p) => s+p.score, 0);
+  const winner = pick(list);
+  state.history = (state.history||[]).filter(h => !h.pending);
+  state.schedule = {
+    id:uid(), date:caught, startAt:when, boss:document.getElementById("boss").value,
+    rewards, entries:list, winner:winner.name, score:winner.score, total, done:false
+  };
+  save();
+  hideSetup();
+  showSchedule();
+  trySpin();
+  if (Date.now() < when) alert("설정했습니다. "+fmt(when)+"이 되면 룰렛이 돌아가고, 그때 기록에 남습니다.");
+}
+document.getElementById("buildBtn").onclick = build;
+document.getElementById("addPerson").onclick = () => {
+  const left = remainingMembers();
+  if (!left.length) return alert("추가할 길드원이 없습니다. 설정에서 등록하세요.");
+  people.push({name:left[0], score:1});
+  renderPeople();
+};
+document.getElementById("addAll").onclick = () => {
+  if (!state.members.length) return alert("설정에서 길드원을 추가하세요.");
+  people = state.members.map(name => ({name, score:1}));
+  renderPeople();
+};
+document.getElementById("addRoulette").onclick = () => {
+  if (!leadMode) return;
+  if (spinning) return alert("룰렛이 돌아가는 중입니다.");
+  const s = state.schedule;
+  if (s && !s.done && Date.now() >= s.startAt) return alert("이미 결과가 나오는 중입니다.");
+  if (s && !s.done && !confirm("예정된 룰렛이 있습니다. 새로 설정하면 이전 예약이 바뀝니다.")) return;
+  if (s && !s.done) prefill(s);
+  else {
+    people = [];
+    rewardDraft = [{name:(state.rewards||[])[0]||"", qty:1, even:false, recipients:[]}];
+    document.getElementById("caughtDate").value = today();
+    document.getElementById("runDate").value = today();
+    fillClock();
+  }
+  showSetup();
+};
+document.getElementById("cancelSetup").onclick = hideSetup;
+document.getElementById("closeModal").onclick = () => {
+  document.getElementById("modal").classList.add("hidden");
+  if (!spinning) showSchedule();
+};
+function renderHistory(){
+  const q = document.getElementById("q").value.trim().toLowerCase();
+  const rows = state.history.filter(h => h && !h.pending && h.winner).filter(h => {
+    const blob = (h.boss||"")+(h.winner||"")+normalizeRewards(h).map(r => r.name).join("");
+    return blob.toLowerCase().includes(q);
+  });
+  document.getElementById("history").innerHTML = rows.length ? rows.map(h => {
+    const parts = (h.entries||[]).map(p => esc(p.name)+" "+p.score).join(" · ");
+    return '<article class="item"><strong>'+esc(h.winner)+"</strong> · "+Number(h.ratio||(h.total?h.score/h.total*100:0)).toFixed(1)+'%<br>잡은 날 '+esc(h.date||"")+" · 실행 "+fmt(h.startAt)+"<br>"+esc(h.boss)+"<br>"+rewardLines(h,true)+'<br><span class="muted">'+parts+'</span><div class="actions"><button type="button" class="btn" data-replay="'+h.id+'">룰렛 돌리기</button></div></article>';
+  }).join("") : "<p class='muted'>기록이 없습니다. 룰렛이 돌아간 뒤에 남습니다.</p>";
+  document.querySelectorAll("[data-replay]").forEach(el => el.onclick = () => {
+    const row = state.history.find(h => h.id === el.dataset.replay);
+    if (row) startReplay(row);
+  });
+}
+document.getElementById("q").oninput = renderHistory;
+function roleOf(name){
+  const roles = [];
+  if (name && name === state.leader) roles.push("길마");
+  if (name && (name === state.vice || name === state.vice2)) roles.push("부길마");
+  return roles.length ? roles.join(" · ") : "길드원";
+}
+function renderMemberView(){
+  document.getElementById("memberView").innerHTML = state.members.length
+    ? "<table><tr><td class=\"muted\">#</td><td class=\"muted\">이름</td><td class=\"muted\">직책</td></tr>"+state.members.map((m,i) => "<tr><td>"+(i+1)+"</td><td>"+esc(m)+"</td><td>"+esc(roleOf(m))+"</td></tr>").join("")+"</table>"
+    : "<p class='muted'>설정에서 길드원을 추가하세요.</p>";
+}
+function savedDps(boss){
+  const map = state.dpsByBoss || {};
+  if (map[boss]) return map[boss];
+  const old = (state.dps||[]).find(d => d.boss === boss);
+  return old ? old.entries : [];
+}
 function renderDps(){
-  const bosses=state.bosses.slice();
-  if(!dpsBossName||!bosses.includes(dpsBossName)) dpsBossName=bosses[0]||"";
-  document.getElementById("dpsCats").innerHTML=bosses.map(b=>'<button type="button" class="'+(b===dpsBossName?"btn":"ghost")+'" data-dps-boss="'+esc(b)+'">'+esc(b)+'</button>').join("")||"<p class='muted'>설정에서 보스를 추가하세요.</p>";
-  document.querySelectorAll("[data-dps-boss]").forEach(el=>el.onclick=()=>{ dpsBossName=el.dataset.dpsBoss; renderDps(); });
-  const saved=savedDps(dpsBossName);
-  const valueOf=name=>{ const row=saved.find(e=>e.name===name); return row?row.dps:""; };
-  document.getElementById("dpsInputs").innerHTML=dpsBossName?state.members.map(m=>'<div class="row" style="margin-top:8px"><span>'+esc(m)+'</span><input data-dps="'+esc(m)+'" type="number" min="0" placeholder="1분 딜량" value="'+valueOf(m)+'"></div>').join("")||"<p class='muted'>길드원을 먼저 추가하세요.</p>":"";
+  const floors = document.getElementById("dpsFloors");
+  floors.innerHTML = FLOORS.map(f => '<button type="button" class="'+(f.id===dpsFloor?"btn":"ghost")+'" data-dps-floor="'+f.id+'">'+f.label+"</button>").join("");
+  floors.querySelectorAll("[data-dps-floor]").forEach(el => el.onclick = () => { dpsFloor = el.dataset.dpsFloor; dpsBossName = ""; renderDps(); });
+  const bosses = state.bosses.filter(b => floorOf(b) === dpsFloor);
+  if (!bosses.includes(dpsBossName)) dpsBossName = bosses[0] || "";
+  document.getElementById("dpsCats").innerHTML = bosses.length
+    ? bosses.map(b => '<button type="button" class="'+(b===dpsBossName?"btn":"ghost")+'" data-dps-boss="'+esc(b)+'">'+esc(b)+"</button>").join("")
+    : "<p class='muted'>이 층에 보스가 없습니다.</p>";
+  document.querySelectorAll("[data-dps-boss]").forEach(el => el.onclick = () => { dpsBossName = el.dataset.dpsBoss; renderDps(); });
+  const saved = savedDps(dpsBossName);
+  const valueOf = name => { const row = saved.find(e => e.name === name); return row ? row.dps : ""; };
+  document.getElementById("dpsInputs").innerHTML = dpsBossName
+    ? state.members.map(m => '<div class="row" style="margin-top:8px"><span>'+esc(m)+'</span><input data-dps="'+esc(m)+'" type="number" min="0" placeholder="1분 딜량" value="'+valueOf(m)+'"></div>').join("")
+    : "";
 }
-document.getElementById("saveDps").onclick=()=>{ if(!dpsBossName) return alert("보스를 선택하세요."); const entries=[...document.querySelectorAll("[data-dps]")].map(el=>({name:el.dataset.dps,dps:Number(el.value)||0})).filter(e=>e.dps>0); if(!entries.length) return alert("1분 딜량을 입력하세요."); if(!state.dpsByBoss) state.dpsByBoss={}; state.dpsByBoss[dpsBossName]=entries; save(); alert("저장했습니다."); };
-function renderSettings(){ document.getElementById("guildName").value=state.guild||""; document.getElementById("firebaseUrl").value=state.firebaseUrl||""; document.getElementById("roomCode").value=state.room||"guild";
-  document.getElementById("leaderPick").innerHTML="<option value=''>길마</option>"+state.members.map(m=>"<option"+(m===state.leader?" selected":"")+">"+esc(m)+"</option>").join("");
-  document.getElementById("vicePick").innerHTML="<option value=''>부길마 1</option>"+state.members.map(m=>"<option"+(m===state.vice?" selected":"")+">"+esc(m)+"</option>").join("");
-  document.getElementById("vicePick2").innerHTML="<option value=''>부길마 2</option>"+state.members.map(m=>"<option"+(m===state.vice2?" selected":"")+">"+esc(m)+"</option>").join("");
-  document.getElementById("bossList").innerHTML=state.bosses.map((b,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-boss="'+i+'">삭제</button></div>').join("");
-  document.getElementById("memberEdit").innerHTML=state.members.map((m,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(m)+' · '+esc(roleOf(m))+'</span><button type="button" class="danger" data-member="'+i+'">삭제</button></div>').join("");
-  document.getElementById("rewardList").innerHTML=(state.rewards||[]).map((b,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-reward="'+i+'">삭제</button></div>').join("");
-  document.querySelectorAll("[data-boss]").forEach(el=>el.onclick=()=>{ state.bosses.splice(Number(el.dataset.boss),1); save(); fillSelects(); renderSettings(); });
-  document.querySelectorAll("[data-member]").forEach(el=>el.onclick=()=>{ state.members.splice(Number(el.dataset.member),1); save(); renderSettings(); });
-  document.querySelectorAll("[data-reward]").forEach(el=>el.onclick=()=>{ state.rewards.splice(Number(el.dataset.reward),1); save(); fillSelects(); renderSettings(); });
+document.getElementById("saveDps").onclick = () => {
+  if (!dpsBossName) return alert("보스를 선택하세요.");
+  const entries = [...document.querySelectorAll("[data-dps]")].map(el => ({name:el.dataset.dps, dps:Number(el.value)||0})).filter(e => e.dps > 0);
+  if (!entries.length) return alert("1분 딜량을 입력하세요.");
+  if (!state.dpsByBoss) state.dpsByBoss = {};
+  state.dpsByBoss[dpsBossName] = entries;
+  save();
+  alert("저장했습니다.");
+};
+function renderSettings(){
+  document.getElementById("guildName").value = state.guild || "";
+  document.getElementById("firebaseUrl").value = state.firebaseUrl || "";
+  document.getElementById("roomCode").value = state.room || "guild";
+  document.getElementById("leaderPick").innerHTML = "<option value=''>길마</option>"+state.members.map(m => "<option"+(m===state.leader?" selected":"")+">"+esc(m)+"</option>").join("");
+  document.getElementById("vicePick").innerHTML = "<option value=''>부길마 1</option>"+state.members.map(m => "<option"+(m===state.vice?" selected":"")+">"+esc(m)+"</option>").join("");
+  document.getElementById("vicePick2").innerHTML = "<option value=''>부길마 2</option>"+state.members.map(m => "<option"+(m===state.vice2?" selected":"")+">"+esc(m)+"</option>").join("");
+  document.getElementById("bossList").innerHTML = state.bosses.map((b,i) => {
+    const f = floorOf(b);
+    const opts = FLOORS.map(fl => '<option value="'+fl.id+'"'+(fl.id===f?" selected":"")+">"+fl.label+"</option>").join("");
+    return '<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><select data-boss-floor="'+i+'">'+opts+'</select><button type="button" class="danger" data-boss="'+i+'">삭제</button></div>';
+  }).join("");
+  document.querySelectorAll("[data-boss-floor]").forEach(el => el.onchange = () => {
+    const name = state.bosses[Number(el.dataset.bossFloor)];
+    if (!name) return;
+    if (!state.bossFloors) state.bossFloors = {};
+    state.bossFloors[name] = el.value;
+    save();
+    renderDps();
+  });
+  document.querySelectorAll("[data-boss]").forEach(el => el.onclick = () => {
+    const i = Number(el.dataset.boss);
+    const name = state.bosses[i];
+    state.bosses.splice(i, 1);
+    if (name && state.bossFloors) delete state.bossFloors[name];
+    save();
+    fillSelects();
+    renderSettings();
+  });
+  document.getElementById("memberEdit").innerHTML = state.members.map((m,i) => '<div class="row" style="margin-top:8px"><span>'+esc(m)+" · "+esc(roleOf(m))+'</span><button type="button" class="danger" data-member="'+i+'">삭제</button></div>').join("");
+  document.querySelectorAll("[data-member]").forEach(el => el.onclick = () => {
+    state.members.splice(Number(el.dataset.member), 1);
+    save();
+    renderSettings();
+  });
+  document.getElementById("rewardList").innerHTML = (state.rewards||[]).map((b,i) => '<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-reward="'+i+'">삭제</button></div>').join("");
+  document.querySelectorAll("[data-reward]").forEach(el => el.onclick = () => {
+    state.rewards.splice(Number(el.dataset.reward), 1);
+    save();
+    fillSelects();
+    renderSettings();
+  });
 }
-document.getElementById("addBoss").onclick=()=>{ const name=document.getElementById("newBoss").value.trim(); if(!name||state.bosses.includes(name)) return; state.bosses.push(name); document.getElementById("newBoss").value=""; save(); fillSelects(); renderSettings(); };
-document.getElementById("addReward").onclick=()=>{ const name=document.getElementById("newReward").value.trim(); if(!state.rewards) state.rewards=[]; if(!name||state.rewards.includes(name)) return; state.rewards.push(name); document.getElementById("newReward").value=""; save(); fillSelects(); renderSettings(); };
-document.getElementById("addMember").onclick=()=>{ const name=document.getElementById("newMember").value.trim(); if(!name||state.members.includes(name)) return; state.members.push(name); document.getElementById("newMember").value=""; save(); renderSettings(); };
-document.getElementById("saveGuild").onclick=()=>{ state.guild=document.getElementById("guildName").value.trim()||"우리 길드"; save(); fillSelects(); };
-document.getElementById("saveCloud").onclick=()=>{ state.firebaseUrl=document.getElementById("firebaseUrl").value.trim().replace(/\/+$/,""); state.room=document.getElementById("roomCode").value.trim()||"guild"; save(); document.getElementById("cloudMsg").textContent=cloudUrl()?"연결했습니다. 길드원 주소에도 같은 db와 room을 붙이세요.":"주소를 비웠습니다."; };
-document.getElementById("saveRoles").onclick=()=>{ state.leader=document.getElementById("leaderPick").value; state.vice=document.getElementById("vicePick").value; state.vice2=document.getElementById("vicePick2").value; save(); renderSettings(); renderMemberView(); };
-document.getElementById("resetRecords").onclick=()=>{ if(!confirm("당첨 기록과 딜량을 지울까요? 길드원과 보스는 남습니다.")) return; state.history=[]; state.dps=[]; state.dpsByBoss={}; state.schedule=null; save(); showSchedule(); renderHistory(); renderDps(); alert("초기화했습니다."); };
-document.getElementById("exportJson").onclick=()=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload(),null,2)],{type:"application/json"})); a.download="guild-ledger.json"; a.click(); };
-document.getElementById("importJson").onclick=()=>document.getElementById("importFile").click();
-document.getElementById("importFile").onchange=async e=>{ const file=e.target.files[0]; if(!file) return; const data=JSON.parse(await file.text()); if(!data.members||!data.bosses) return alert("백업 파일이 아닙니다."); Object.assign(state,data); save(); fillSelects(); renderSettings(); };
-const fx=document.getElementById("fx"), fctx=fx.getContext("2d"); let sparks=[];
-function resize(){ fx.width=innerWidth; fx.height=innerHeight; } addEventListener("resize", resize); resize();
-function fireworks(){ sparks=[]; for(let i=0;i<28;i++){ const a=Math.random()*Math.PI*2, v=1+Math.random()*2.4; sparks.push({x:innerWidth/2,y:innerHeight/2-40,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:36,color:COLORS[i%COLORS.length]}); } tick(); }
-function tick(){ fctx.clearRect(0,0,fx.width,fx.height); sparks.forEach(s=>{ s.x+=s.vx; s.y+=s.vy; s.life--; fctx.globalAlpha=Math.max(s.life/36,0); fctx.fillStyle=s.color; fctx.fillRect(s.x,s.y,3,3); }); sparks=sparks.filter(s=>s.life>0); if(sparks.length) requestAnimationFrame(tick); }
-applyRole(); fillSelects(); renderPeople(); showSchedule(); setInterval(pullCloud,4000);
+document.getElementById("addBoss").onclick = () => {
+  const name = document.getElementById("newBoss").value.trim();
+  if (!name || state.bosses.includes(name)) return;
+  state.bosses.push(name);
+  if (!state.bossFloors) state.bossFloors = {};
+  state.bossFloors[name] = document.getElementById("newBossFloor").value || "1";
+  document.getElementById("newBoss").value = "";
+  save();
+  fillSelects();
+  renderSettings();
+};
+document.getElementById("addReward").onclick = () => {
+  const name = document.getElementById("newReward").value.trim();
+  if (!state.rewards) state.rewards = [];
+  if (!name || state.rewards.includes(name)) return;
+  state.rewards.push(name);
+  document.getElementById("newReward").value = "";
+  save();
+  fillSelects();
+  renderSettings();
+};
+document.getElementById("addMember").onclick = () => {
+  const name = document.getElementById("newMember").value.trim();
+  if (!name || state.members.includes(name)) return;
+  state.members.push(name);
+  document.getElementById("newMember").value = "";
+  save();
+  renderSettings();
+};
+document.getElementById("saveGuild").onclick = () => {
+  state.guild = document.getElementById("guildName").value.trim() || "우리 길드";
+  save();
+  fillSelects();
+};
+document.getElementById("saveCloud").onclick = () => {
+  state.firebaseUrl = document.getElementById("firebaseUrl").value.trim().replace(/\/+$/,"");
+  state.room = document.getElementById("roomCode").value.trim() || "guild";
+  save();
+  document.getElementById("cloudMsg").textContent = cloudUrl() ? "연결했습니다. 같은 방으로 결과가 공유됩니다." : "주소를 비웠습니다.";
+};
+document.getElementById("saveRoles").onclick = () => {
+  state.leader = document.getElementById("leaderPick").value;
+  state.vice = document.getElementById("vicePick").value;
+  state.vice2 = document.getElementById("vicePick2").value;
+  save();
+  renderSettings();
+  renderMemberView();
+};
+document.getElementById("resetRecords").onclick = () => {
+  if (!confirm("당첨 기록과 딜량을 지울까요? 길드원과 보스는 남습니다.")) return;
+  state.history = [];
+  state.dps = [];
+  state.dpsByBoss = {};
+  state.schedule = null;
+  save();
+  showSchedule();
+  renderHistory();
+  renderDps();
+  alert("초기화했습니다.");
+};
+document.getElementById("exportJson").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload(), null, 2)], {type:"application/json"}));
+  a.download = "guild-ledger.json";
+  a.click();
+};
+document.getElementById("importJson").onclick = () => document.getElementById("importFile").click();
+document.getElementById("importFile").onchange = async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const data = JSON.parse(await file.text());
+  if (!data.members || !data.bosses) return alert("백업 파일이 아닙니다.");
+  Object.assign(state, data);
+  if (!state.bossFloors) state.bossFloors = {};
+  save();
+  fillSelects();
+  renderSettings();
+};
+const fx = document.getElementById("fx");
+const fctx = fx.getContext("2d");
+let sparks = [];
+function resize(){ fx.width = innerWidth; fx.height = innerHeight; }
+addEventListener("resize", resize);
+resize();
+function fireworks(){
+  sparks = [];
+  for (let i = 0; i < 28; i++) {
+    const a = Math.random()*Math.PI*2, v = 1+Math.random()*2.4;
+    sparks.push({x:innerWidth/2, y:innerHeight/2-40, vx:Math.cos(a)*v, vy:Math.sin(a)*v, life:36, color:COLORS[i%COLORS.length]});
+  }
+  tick();
+}
+function tick(){
+  fctx.clearRect(0,0,fx.width,fx.height);
+  sparks.forEach(s => { s.x += s.vx; s.y += s.vy; s.life--; fctx.globalAlpha = Math.max(s.life/36,0); fctx.fillStyle = s.color; fctx.fillRect(s.x,s.y,3,3); });
+  sparks = sparks.filter(s => s.life > 0);
+  if (sparks.length) requestAnimationFrame(tick);
+}
+function tickClock(){
+  document.getElementById("nowClock").textContent = fmtFull(Date.now());
+  const line = document.getElementById("scheduleLine");
+  const s = state.schedule;
+  if (!s || s.done) line.textContent = "";
+  else {
+    const left = s.startAt - Date.now();
+    if (left > 0) {
+      const sec = Math.ceil(left/1000);
+      const m = Math.floor(sec/60);
+      const ss = sec % 60;
+      line.textContent = "실행 "+fmt(s.startAt)+" · "+(m ? m+"분 " : "")+ss+"초 후";
+    } else line.textContent = "실행 "+fmt(s.startAt);
+  }
+  trySpin();
+}
+applyRole();
+fillSelects();
+adoptSchedule();
+showSchedule();
+tickClock();
+setInterval(tickClock, 1000);
+setInterval(pullCloud, 4000);
 </script>
 </body>
 </html>
