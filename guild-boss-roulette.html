@@ -448,7 +448,7 @@ function renderRewardRows(){
       ? names.map(n => "<option"+(n===r.name?" selected":"")+">"+esc(n)+"</option>").join("")
       : "<option value=''>설정에서 보상 추가</option>";
     const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
-    return '<div class="reward-line"><select data-rw="'+i+'">'+opts+'</select><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type=\'button\' class=\'danger\' data-rd=\'"+i+"\'>삭제</button></div>"+note;
+    return '<div class="reward-line"><select data-rw="'+i+'">'+opts+'</select><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
   }).join("");
   box.querySelectorAll("[data-rw]").forEach(el => el.onchange = () => { rewardDraft[el.dataset.rw].name = el.value; });
   box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => { rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
