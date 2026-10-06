@@ -16,13 +16,6 @@
   header { display:flex; align-items:center; justify-content:center; gap:10px; text-align:left;
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
   header img { width:86px; height:86px; object-fit:contain; border:0; background:transparent; flex:0 0 auto; filter:drop-shadow(2px 3px 0 #2b1a0e); }
-  .field-wolf { position:fixed; right:2vw; bottom:0; width:min(230px, 46vw); z-index:1; pointer-events:none; transform-origin:50% 100%; animation:breathe 3.4s ease-in-out infinite; }
-  .field-wolf img { width:100%; height:auto; display:block; }
-  .field-wolf .beam { position:absolute; top:37%; height:3px; width:34%; border-radius:99px; opacity:0; background:linear-gradient(90deg, rgba(255,236,255,.15), #f5edff 10%, #d8b4fe 42%, rgba(168,85,247,0)); box-shadow:0 0 8px 2px #c084fc, 0 0 16px 4px rgba(168,85,247,.75); animation:zap 1.15s infinite; }
-  .field-wolf .beam.l { left:4%; width:36%; transform:rotate(178deg); transform-origin:right center; }
-  .field-wolf .beam.r { left:72%; right:auto; width:32%; transform:rotate(2deg); transform-origin:left center; animation-delay:.12s; }
-  @keyframes breathe { 0%,100% { transform:translateY(8px); } 50% { transform:translateY(-12px); } }
-  @keyframes zap { 0%,46% { opacity:0; } 50%,68% { opacity:1; } 78%,100% { opacity:0; } }
   h1 { margin:0; font-size:32px; font-weight:800; letter-spacing:-.03em; }
   header .sub { margin:2px 0 0; color:#f0d7a2; font-size:13px; font-weight:600; }
   nav { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; border:0; margin:14px 0 8px; }
@@ -79,18 +72,12 @@
     .grid { grid-template-columns:1fr; }
     h1 { font-size:26px; }
     header img { width:72px; height:72px; }
-    .field-wolf { width:140px; }
     #nowClock { font-size:32px; }
   }
 </style>
 </head>
 <body>
 <canvas id="fx"></canvas>
-<div class="field-wolf" aria-hidden="true">
-  <img src="purple-mech-wolf.png" alt="" />
-  <i class="beam l"></i>
-  <i class="beam r"></i>
-</div>
 <div class="wrap">
   <header>
     <img src="guild-cat-head.png" alt="" />
