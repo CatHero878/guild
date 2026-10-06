@@ -27,7 +27,11 @@
   .row > * { flex:1; }
   .line { display:grid; grid-template-columns:1fr 88px auto; gap:8px; margin-bottom:8px; }
   .reward-line { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
-  .reward-line select { flex:1 1 140px; width:auto; }
+  .reward-line .pickbtn { flex:1 1 140px; width:auto; text-align:left; }
+  #bossPick { width:100%; text-align:left; }
+  .cat { margin:14px 0 6px; font-size:13px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  #pickList { max-height:52vh; overflow:auto; }
   .reward-line input[type=number] { flex:0 0 76px; width:76px; }
   label.inline { display:flex; align-items:center; gap:6px; margin:0; color:var(--ink); font-size:13px; width:auto; }
   label.inline input { width:auto; }
@@ -77,7 +81,9 @@
     <p id="scheduleLine" class="muted"></p>
     <div class="grid solo" id="rouletteGrid">
       <div class="card hidden" id="setupCard">
-        <label>보스명</label><select id="boss"></select>
+        <label>보스명</label>
+        <button type="button" class="ghost" id="bossPick">보스를 선택하세요</button>
+        <input id="boss" type="hidden" />
         <label>보상 · 수량</label>
         <div id="rewardRows"></div>
         <button type="button" class="ghost" id="addRewardRow">보상 추가</button>
@@ -86,7 +92,7 @@
         <label>룰렛 실행 날짜</label><input id="runDate" type="date" />
         <label>룰렛 실행 시각</label>
         <div class="row"><select id="runHour"></select><select id="runMinute"></select></div>
-        <p class="muted">잡은 날짜는 보스를 잡은 날입니다. 실행 시각이 되면 룰렛이 바로 돌아갑니다.</p>
+        <p class="muted">잡은 날짜는 보스를 잡은 날입니다. 실행 시각은 5분 단위이고, 그 시각이 되면 룰렛이 바로 돌아갑니다.</p>
         <label>참여자 · 기여도</label>
         <div id="people"></div>
         <div class="actions">
@@ -171,7 +177,14 @@
 <div id="modal" class="modal-back hidden">
   <div class="modal"><div class="muted" id="winKicker">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="closeModal">확인</button></div></div>
 </div>
-<div id="splitModal" class="modal-back hidden">
+<div id="pickModal" class="modal-back hidden">
+  <div class="modal" style="text-align:left">
+    <div id="pickTitle">선택</div>
+    <div id="pickFloors" class="actions"></div>
+    <div id="pickList"></div>
+    <div class="actions"><button type="button" class="ghost" id="pickClose">닫기</button></div>
+  </div>
+</div>
   <div class="modal" style="text-align:left">
     <div class="muted">균등 분배</div>
     <p class="muted">체크한 인원에게 수량을 똑같이 나눕니다. 딱 떨어지지 않으면 남은 개는 그 인원 중 랜덤으로 1개씩 더 갑니다.</p>
@@ -315,12 +328,12 @@ function fillClock(){
       const o = document.createElement("option");
       o.value = pad(i); o.textContent = o.value + "시"; h.appendChild(o);
     }
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 60; i += 5) {
       const o = document.createElement("option");
       o.value = pad(i); o.textContent = o.value + "분"; m.appendChild(o);
     }
   }
-  const n = new Date();
+  const n = snap5(new Date());
   h.value = pad(n.getHours());
   m.value = pad(n.getMinutes());
 }
@@ -363,9 +376,83 @@ function options(list, selected){
     ? list.map(n => "<option"+(n===selected?" selected":"")+">"+esc(n)+"</option>").join("")
     : "<option value=''>설정에서 추가</option>";
 }
+function snap5(d){
+  const x = new Date(d.getTime());
+  x.setSeconds(0, 0);
+  x.setMinutes(Math.round(x.getMinutes() / 5) * 5);
+  return x;
+}
+function setBoss(name){
+  document.getElementById("boss").value = name || "";
+  document.getElementById("bossPick").textContent = name || "보스를 선택하세요";
+}
+function rewardCategory(name){
+  const n = String(name || "");
+  const nouns = ["목도리", "장갑", "신발", "모자", "소환서", "망토", "반지", "귀걸이", "룬"];
+  for (const noun of nouns) if (n.includes(noun)) return noun;
+  const colors = ["하얀색", "흰색", "초록색", "파란색", "빨간색", "노란색", "검은색", "검정색", "보라색", "분홍색", "주황색", "하늘색", "금색", "은색", "회색", "연두색", "청록색", "초록", "파란", "빨간", "노란", "검은", "검정", "보라", "분홍", "주황", "하늘", "흰"];
+  let s = n.trim();
+  for (const c of colors) {
+    if (s.startsWith(c)) { s = s.slice(c.length).trim(); break; }
+  }
+  return s || n || "기타";
+}
+function rewardGroups(){
+  const map = new Map();
+  (state.rewards || []).forEach(name => {
+    const cat = rewardCategory(name);
+    if (!map.has(cat)) map.set(cat, []);
+    map.get(cat).push(name);
+  });
+  return [...map.entries()];
+}
+let pickMode = "";
+let pickRow = -1;
+let pickFloor = "1";
+function renderPick(){
+  const list = document.getElementById("pickList");
+  if (pickMode === "boss") {
+    document.getElementById("pickFloors").classList.remove("hidden");
+    document.getElementById("pickFloors").innerHTML = FLOORS.map(f => '<button type="button" class="'+(f.id===pickFloor?"btn":"ghost")+'" data-pick-floor="'+f.id+'">'+f.label+"</button>").join("");
+    document.querySelectorAll("[data-pick-floor]").forEach(el => el.onclick = () => { pickFloor = el.dataset.pickFloor; renderPick(); });
+    const bosses = state.bosses.filter(b => floorOf(b) === pickFloor);
+    list.innerHTML = bosses.length
+      ? '<div class="chips">'+bosses.map(b => '<button type="button" class="ghost" data-pick-boss="'+esc(b)+'">'+esc(b)+"</button>").join("")+"</div>"
+      : "<p class='muted'>이 층에 보스가 없습니다.</p>";
+    list.querySelectorAll("[data-pick-boss]").forEach(el => el.onclick = () => {
+      setBoss(el.dataset.pickBoss);
+      document.getElementById("pickModal").classList.add("hidden");
+    });
+    return;
+  }
+  document.getElementById("pickFloors").classList.add("hidden");
+  const groups = rewardGroups();
+  list.innerHTML = groups.length ? groups.map(([cat, names]) => '<div class="cat">'+esc(cat)+'</div><div class="chips">'+names.map(n => '<button type="button" class="ghost" data-pick-reward="'+esc(n)+'">'+esc(n)+"</button>").join("")+"</div>").join("") : "<p class='muted'>설정에서 보상을 추가하세요.</p>";
+  list.querySelectorAll("[data-pick-reward]").forEach(el => el.onclick = () => {
+    if (rewardDraft[pickRow]) rewardDraft[pickRow].name = el.dataset.pickReward;
+    document.getElementById("pickModal").classList.add("hidden");
+    renderRewardRows();
+  });
+}
+function openBossPick(){
+  pickMode = "boss";
+  const current = document.getElementById("boss").value;
+  pickFloor = current ? floorOf(current) : "1";
+  document.getElementById("pickTitle").textContent = "보스";
+  renderPick();
+  document.getElementById("pickModal").classList.remove("hidden");
+}
+function openRewardPick(i){
+  pickMode = "reward";
+  pickRow = i;
+  document.getElementById("pickTitle").textContent = "보상";
+  renderPick();
+  document.getElementById("pickModal").classList.remove("hidden");
+}
+document.getElementById("bossPick").onclick = openBossPick;
+document.getElementById("pickClose").onclick = () => document.getElementById("pickModal").classList.add("hidden");
 function fillSelects(){
-  const boss = document.getElementById("boss").value;
-  document.getElementById("boss").innerHTML = options(state.bosses, boss);
+  setBoss(document.getElementById("boss").value);
   document.getElementById("title").textContent = state.guild || "우리 길드";
 }
 function remainingMembers(){
@@ -442,15 +529,11 @@ function rewardLines(item, detailed){
 function renderRewardRows(){
   const box = document.getElementById("rewardRows");
   box.innerHTML = rewardDraft.map((r,i) => {
-    const names = (state.rewards||[]).slice();
-    if (r.name && !names.includes(r.name)) names.unshift(r.name);
-    const opts = names.length
-      ? names.map(n => "<option"+(n===r.name?" selected":"")+">"+esc(n)+"</option>").join("")
-      : "<option value=''>설정에서 보상 추가</option>";
     const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
-    return '<div class="reward-line"><select data-rw="'+i+'">'+opts+'</select><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
+    const label = r.name || "보상 선택";
+    return '<div class="reward-line"><button type="button" class="ghost pickbtn" data-rp="'+i+'">'+esc(label)+'</button><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
   }).join("");
-  box.querySelectorAll("[data-rw]").forEach(el => el.onchange = () => { rewardDraft[el.dataset.rw].name = el.value; });
+  box.querySelectorAll("[data-rp]").forEach(el => el.onclick = () => openRewardPick(Number(el.dataset.rp)));
   box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => { rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
   box.querySelectorAll("[data-re]").forEach(el => el.onchange = () => {
     const i = Number(el.dataset.re);
@@ -501,11 +584,10 @@ document.getElementById("splitCancel").onclick = () => {
   renderRewardRows();
 };
 document.getElementById("addRewardRow").onclick = () => {
-  rewardDraft.push({name:(state.rewards||[])[0]||"", qty:1, even:false, recipients:[]});
+  rewardDraft.push({name:"", qty:1, even:false, recipients:[]});
   renderRewardRows();
 };
 function syncRewardDraft(){
-  document.querySelectorAll("[data-rw]").forEach(el => { if (rewardDraft[el.dataset.rw]) rewardDraft[el.dataset.rw].name = el.value; });
   document.querySelectorAll("[data-rq]").forEach(el => { if (rewardDraft[el.dataset.rq]) rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
 }
 function splitEven(qty, names){
@@ -626,6 +708,7 @@ function trySpin(){
   if (recorded(s.id)) { s.done = true; showSchedule(); return; }
   hideSetup();
   document.getElementById("splitModal").classList.add("hidden");
+  document.getElementById("pickModal").classList.add("hidden");
   show("roulette");
   animateTo(s.entries, s.winner, finishSchedule);
 }
@@ -638,13 +721,15 @@ function prefill(s){
   people = (s.entries||[]).map(e => ({name:e.name, score:e.score}));
   const list = normalizeRewards(s);
   rewardDraft = list.length ? list.map(r => ({name:r.name, qty:r.qty||1, even:!!r.even, recipients:(r.recipients||[]).slice()})) : [{name:"", qty:1, even:false, recipients:[]}];
-  document.getElementById("boss").value = s.boss || document.getElementById("boss").value;
+  document.getElementById("boss").value = s.boss || "";
+  setBoss(s.boss || "");
   document.getElementById("caughtDate").value = s.date || today();
   const d = new Date(s.startAt);
   if (!Number.isNaN(d.getTime())) {
-    document.getElementById("runDate").value = d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
-    document.getElementById("runHour").value = pad(d.getHours());
-    document.getElementById("runMinute").value = pad(d.getMinutes());
+    const snapped = snap5(d);
+    document.getElementById("runDate").value = snapped.getFullYear()+"-"+pad(snapped.getMonth()+1)+"-"+pad(snapped.getDate());
+    document.getElementById("runHour").value = pad(snapped.getHours());
+    document.getElementById("runMinute").value = pad(snapped.getMinutes());
   }
 }
 function build(){
@@ -710,7 +795,8 @@ document.getElementById("addRoulette").onclick = () => {
   if (s && !s.done) prefill(s);
   else {
     people = [];
-    rewardDraft = [{name:(state.rewards||[])[0]||"", qty:1, even:false, recipients:[]}];
+    rewardDraft = [{name:"", qty:1, even:false, recipients:[]}];
+    setBoss("");
     document.getElementById("caughtDate").value = today();
     document.getElementById("runDate").value = today();
     fillClock();
