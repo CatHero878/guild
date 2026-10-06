@@ -16,7 +16,6 @@
   header { display:flex; align-items:center; justify-content:center; gap:10px; text-align:left;
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
   header img { width:86px; height:86px; object-fit:contain; border:0; background:transparent; flex:0 0 auto; filter:drop-shadow(2px 3px 0 #2b1a0e); }
-  canvas#meadow { position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:1; }
   h1 { margin:0; font-size:32px; font-weight:800; letter-spacing:-.03em; }
   header .sub { margin:2px 0 0; color:#f0d7a2; font-size:13px; font-weight:600; }
   nav { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; border:0; margin:14px 0 8px; }
@@ -79,7 +78,6 @@
 </head>
 <body>
 <canvas id="fx"></canvas>
-<canvas id="meadow"></canvas>
 <div class="wrap">
   <header>
     <img src="guild-cat-head.png" alt="" />
@@ -1080,12 +1078,7 @@ document.getElementById("importFile").onchange = async e => {
 const fx = document.getElementById("fx");
 const fctx = fx.getContext("2d");
 let sparks = [];
-function resize(){
-  fx.width = innerWidth;
-  fx.height = innerHeight;
-  const meadow = document.getElementById("meadow");
-  if (meadow) { meadow.width = innerWidth; meadow.height = innerHeight; }
-}
+function resize(){ fx.width = innerWidth; fx.height = innerHeight; }
 addEventListener("resize", resize);
 resize();
 function fireworks(){
@@ -1106,50 +1099,6 @@ function tickClock(){
   document.getElementById("nowClock").textContent = fmtFull(Date.now());
   trySpin();
 }
-const meadow = document.getElementById("meadow");
-const mctx = meadow.getContext("2d", {alpha:true});
-const danceSrc = ["dance-ice.mp4","dance-knight.mp4","dance-beast.mp4","dance-dragon.mp4","dance-wolf.mp4","dance-mage.mp4"];
-const danceOff = danceSrc.map(() => {
-  const c = document.createElement("canvas");
-  c.width = 180; c.height = 180;
-  return {c, x:c.getContext("2d", {willReadFrequently:true})};
-});
-const danceVid = danceSrc.map(src => {
-  const v = document.createElement("video");
-  v.src = src; v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
-  v.setAttribute("playsinline", "");
-  v.style.cssText = "position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none";
-  document.body.appendChild(v);
-  v.play().catch(() => {});
-  return v;
-});
-function kickDance(){ danceVid.forEach(v => v.play().catch(() => {})); }
-addEventListener("pointerdown", kickDance, {once:true});
-function paintMeadow(){
-  mctx.clearRect(0,0,meadow.width,meadow.height);
-  const n = danceVid.length;
-  const size = Math.max(110, Math.min(210, meadow.width / 6.4));
-  danceVid.forEach((v,i) => {
-    if (v.readyState < 2) return;
-    const off = danceOff[i];
-    off.x.drawImage(v, 0, 0, off.c.width, off.c.height);
-    const img = off.x.getImageData(0, 0, off.c.width, off.c.height);
-    const d = img.data;
-    for (let p = 0; p < d.length; p += 4) {
-      const r = d[p], g = d[p+1], b = d[p+2];
-      if (g > 80 && g > r + 28 && g > b + 28) d[p+3] = 0;
-      else if (g > r + 12 && g > b + 12) {
-        d[p+3] = Math.min(d[p+3], Math.max(0, 255 - (g - Math.max(r,b)) * 7));
-        d[p+1] = Math.min(g, Math.max(r,b) + 6);
-      }
-    }
-    off.x.putImageData(img, 0, 0);
-    const x = (i + 0.5) * (meadow.width / n) - size / 2;
-    mctx.drawImage(off.c, x, meadow.height - size + 8, size, size);
-  });
-  requestAnimationFrame(paintMeadow);
-}
-requestAnimationFrame(paintMeadow);
 applyRole();
 fillSelects();
 adoptSchedule();
