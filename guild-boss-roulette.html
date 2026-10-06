@@ -68,8 +68,10 @@
       <label>보스명</label><select id="boss"></select>
       <label>보상</label><select id="reward"></select>
       <label>잡은 날짜</label><input id="caughtDate" type="date" />
-      <label>룰렛 실행</label><input id="startAt" type="datetime-local" />
-      <p class="muted">잡은 날짜는 보스를 잡은 날, 룰렛 실행은 돌아가는 시·분입니다.</p>
+      <label>룰렛 실행 날짜</label><input id="runDate" type="date" />
+      <label>룰렛 실행 시각</label>
+      <div class="row"><select id="runHour"></select><select id="runMinute"></select></div>
+      <p class="muted">잡은 날짜는 보스를 잡은 날입니다. 룰렛 실행은 돌아가는 날짜와 시, 분입니다.</p>
       <label>수량</label><input id="qty" type="number" min="1" value="1" />
       <label>참여자 · 기여도</label>
       <div id="people"></div>
@@ -89,7 +91,9 @@
   <section id="view-history" class="card hidden"><input id="q" placeholder="검색" /><div id="history"></div></section>
   <section id="view-members" class="card hidden"><div id="memberView"></div></section>
   <section id="view-dps" class="card hidden">
+    <label>보스</label>
     <div id="dpsCats" class="actions"></div>
+    <p class="muted">보스를 고른 뒤 길드원 이름 옆 1분 딜량을 적고 확인을 누르세요. 날짜는 없습니다.</p>
     <div id="dpsInputs"></div>
     <div class="actions"><button type="button" class="btn" id="saveDps">확인</button></div>
   </section>
@@ -149,7 +153,7 @@ if(!state.rewards) state.rewards=[];
 if(!state.dpsByBoss) state.dpsByBoss={};
 if (queryDb) state.firebaseUrl = queryDb;
 if (queryRoom) state.room = queryRoom;
-function payload(){ return { guild:state.guild, members:state.members, bosses:state.bosses, rewards:state.rewards||[], history:state.history, dps:state.dps, dpsByBoss:state.dpsByBoss||{}, schedule:state.schedule||null, firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1 }; }
+function payload(){ return { guild:state.guild, members:state.members, bosses:state.bosses, rewards:state.rewards||[], leader:state.leader||"", vice:state.vice||"", vice2:state.vice2||"", history:state.history, dps:state.dps, dpsByBoss:state.dpsByBoss||{}, schedule:state.schedule||null, firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1 }; }
 function save(){ state.rev=(state.rev||1)+1; state.updatedAt=Date.now(); localStorage.setItem(KEY, JSON.stringify(state)); document.getElementById("title").textContent=state.guild||"우리 길드"; pushCloud(); }
 function cloudUrl(){ const base=(state.firebaseUrl||"").trim().replace(/\/+$/,""); const room=(state.room||"guild").replace(/[.#$\[\]]/g,"-"); return base ? base+"/guild-ledger/"+encodeURIComponent(room)+".json" : ""; }
 async function pushCloud(){ const url=cloudUrl(); if(!url||pushing) return; pushing=true; try { await fetch(url,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload())}); } catch(e){} pushing=false; }
@@ -158,6 +162,9 @@ function uid(){ return Math.random().toString(36).slice(2,10); }
 function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function esc(s){ return String(s??"").replace(/[&<>"']/g, c => ({"&":"\u0026amp;","<":"\u0026lt;",">":"\u0026gt;",'"':"\u0026#34;","'":"\u0026#39;"})[c]); }
 document.getElementById("caughtDate").value=today();
+document.getElementById("runDate").value=today();
+function fillClock(){ const h=document.getElementById("runHour"), m=document.getElementById("runMinute"); if(!h.options.length){ for(let i=0;i<24;i++){ const o=document.createElement("option"); o.value=String(i).padStart(2,"0"); o.textContent=o.value+"시"; h.appendChild(o);} for(let i=0;i<60;i++){ const o=document.createElement("option"); o.value=String(i).padStart(2,"0"); o.textContent=o.value+"분"; m.appendChild(o);} } const n=new Date(); h.value=String(n.getHours()).padStart(2,"0"); m.value=String(n.getMinutes()).padStart(2,"0"); }
+fillClock();
 function applyRole(){
   document.getElementById("tabSettings").classList.toggle("hidden", !leadMode);
   document.getElementById("setupCard").classList.toggle("hidden", !leadMode);
@@ -181,7 +188,7 @@ function preview(){ const list=active(), total=list.reduce((s,p)=>s+p.score,0); 
 function draw(){ const canvas=document.getElementById("wheel"), ctx=canvas.getContext("2d"), list=ready||active(), total=list.reduce((s,p)=>s+p.score,0)||1; ctx.clearRect(0,0,800,800); ctx.save(); ctx.translate(400,400); ctx.rotate(rotation); let angle=-Math.PI/2; if(!list.length){ ctx.beginPath(); ctx.arc(0,0,300,0,Math.PI*2); ctx.fillStyle="#2a3444"; ctx.fill(); } list.forEach((p,i)=>{ const slice=p.score/total*Math.PI*2; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,300,angle,angle+slice); ctx.closePath(); ctx.fillStyle=COLORS[i%COLORS.length]; ctx.fill(); if(slice>0.25){ ctx.save(); ctx.rotate(angle+slice/2); ctx.fillStyle="#f4f6f8"; ctx.font="24px IBM Plex Sans KR, sans-serif"; ctx.textAlign="right"; ctx.fillText(p.name,260,8); ctx.restore(); } angle+=slice; }); ctx.beginPath(); ctx.arc(0,0,70,0,Math.PI*2); ctx.fillStyle="#1b2430"; ctx.fill(); ctx.restore(); }
 function fmt(ts){ const d=new Date(ts); if(Number.isNaN(d.getTime())) return ""; return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
 function showSchedule(){ const s=state.schedule; ready=s&&s.entries?s.entries:null; const info=document.getElementById("spinInfo"); if(!s){ info.textContent="대기 중인 룰렛이 없습니다."; document.getElementById("wheelHint").textContent="시작 시간이 되면 룰렛이 돌아갑니다."; draw(); return; } info.innerHTML=esc(s.boss)+" · "+esc(s.reward)+" x"+(s.qty||1)+"<br>시작 "+fmt(s.startAt); document.getElementById("wheelHint").textContent=s.done?"종료된 룰렛입니다.":"시작 시간이 되면 자동으로 돌아갑니다."; draw(); }
-function build(){ const list=active(); const caught=document.getElementById("caughtDate").value; const when=new Date(document.getElementById("startAt").value).getTime(); if(!document.getElementById("boss").value) return alert("보스를 고르세요."); if(!document.getElementById("reward").value) return alert("설정에서 보상을 추가하세요."); if(!caught) return alert("잡은 날짜를 고르세요."); if(!when) return alert("룰렛 실행 시·분을 고르세요."); if(!list.length) return alert("기여도가 있는 참가자가 필요합니다."); const winner=pick(list); const item={id:uid(), date:caught, startAt:when, boss:document.getElementById("boss").value, reward:document.getElementById("reward").value.trim(), qty:Number(document.getElementById("qty").value)||1, entries:list, winner:winner.name, score:winner.score, total:list.reduce((s,p)=>s+p.score,0), pending:true}; state.history.unshift(item); state.schedule=item; save(); showSchedule(); renderHistory(); alert("기록에 넣어 두었습니다. 결과확인을 누르면 룰렛이 돌아갑니다."); }
+function build(){ const list=active(); const caught=document.getElementById("caughtDate").value; const runDate=document.getElementById("runDate").value; const hh=document.getElementById("runHour").value; const mm=document.getElementById("runMinute").value; const when=new Date(runDate+"T"+hh+":"+mm+":00").getTime(); if(!document.getElementById("boss").value) return alert("보스를 고르세요."); if(!document.getElementById("reward").value) return alert("설정에서 보상을 추가하세요."); if(!caught) return alert("잡은 날짜를 고르세요."); if(!runDate||!hh||!mm||!when) return alert("룰렛 실행 날짜와 시, 분을 고르세요."); if(!list.length) return alert("기여도가 있는 참가자가 필요합니다."); const winner=pick(list); const item={id:uid(), date:caught, startAt:when, boss:document.getElementById("boss").value, reward:document.getElementById("reward").value.trim(), qty:Number(document.getElementById("qty").value)||1, entries:list, winner:winner.name, score:winner.score, total:list.reduce((s,p)=>s+p.score,0), pending:true}; state.history.unshift(item); state.schedule=item; save(); showSchedule(); renderHistory(); alert("기록에 넣어 두었습니다. 결과확인을 누르면 룰렛이 돌아갑니다."); }
 function pick(list){ let t=Math.random()*list.reduce((s,p)=>s+p.score,0); for(const p of list){ t-=p.score; if(t<=0) return p; } return list.at(-1); }
 function destination(list,winnerName){ const total=list.reduce((s,p)=>s+p.score,0); let start=-Math.PI/2; for(const p of list){ const slice=p.score/total*Math.PI*2; if(p.name===winnerName){ const land=start+slice*0.5; const current=((rotation%(Math.PI*2))+Math.PI*2)%(Math.PI*2); const want=((-Math.PI/2-land)%(Math.PI*2)+Math.PI*2)%(Math.PI*2); return rotation+6*Math.PI*2+(want-current+Math.PI*2)%(Math.PI*2); } start+=slice; } return rotation; }
 function finishSchedule(){ const s=state.schedule; const row=state.history.find(h=>h.id===s.id); if(row){ row.pending=false; row.ratio=s.score/s.total*100; } s.done=true; s.pending=false; save(); renderHistory(); }
@@ -194,7 +201,7 @@ function renderHistory(){ const q=document.getElementById("q").value.trim().toLo
 function confirmResult(id){ const row=state.history.find(h=>h.id===id); if(!row||!row.pending||spinning) return; if(Date.now()<row.startAt) return alert("룰렛 시작 날짜 이후에 확인할 수 있습니다."); state.schedule=row; show("roulette"); showSchedule(); startScheduled(); }
 document.getElementById("q").oninput=renderHistory;
 function roleOf(name){ const roles=[]; if(name&&name===state.leader) roles.push("길마"); if(name&&(name===state.vice||name===state.vice2)) roles.push("부길마"); return roles.length?roles.join(" · "):"길드원"; }
-function renderMemberView(){ document.getElementById("memberView").innerHTML=state.members.length?"<table>"+state.members.map((m,i)=>"<tr><td>"+(i+1)+"</td><td>"+esc(m)+"</td><td>"+roleOf(m)+"</td></tr>").join("")+"</table>":"<p class='muted'>설정에서 길드원을 추가하세요.</p>"; }
+function renderMemberView(){ document.getElementById("memberView").innerHTML=state.members.length?"<table><tr><td class=\"muted\">#</td><td class=\"muted\">이름</td><td class=\"muted\">직책</td></tr>"+state.members.map((m,i)=>"<tr><td>"+(i+1)+"</td><td>"+esc(m)+"</td><td>"+esc(roleOf(m))+"</td></tr>").join("")+"</table>":"<p class='muted'>설정에서 길드원을 추가하세요.</p>"; }
 function savedDps(boss){ const map=state.dpsByBoss||{}; if(map[boss]) return map[boss]; const old=(state.dps||[]).find(d=>d.boss===boss); return old?old.entries:[]; }
 function renderDps(){
   const bosses=state.bosses.slice();
@@ -211,7 +218,7 @@ function renderSettings(){ document.getElementById("guildName").value=state.guil
   document.getElementById("vicePick").innerHTML="<option value=''>부길마 1</option>"+state.members.map(m=>"<option"+(m===state.vice?" selected":"")+">"+esc(m)+"</option>").join("");
   document.getElementById("vicePick2").innerHTML="<option value=''>부길마 2</option>"+state.members.map(m=>"<option"+(m===state.vice2?" selected":"")+">"+esc(m)+"</option>").join("");
   document.getElementById("bossList").innerHTML=state.bosses.map((b,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-boss="'+i+'">삭제</button></div>').join("");
-  document.getElementById("memberEdit").innerHTML=state.members.map((m,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(m)+'</span><button type="button" class="danger" data-member="'+i+'">삭제</button></div>').join("");
+  document.getElementById("memberEdit").innerHTML=state.members.map((m,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(m)+' · '+esc(roleOf(m))+'</span><button type="button" class="danger" data-member="'+i+'">삭제</button></div>').join("");
   document.getElementById("rewardList").innerHTML=(state.rewards||[]).map((b,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-reward="'+i+'">삭제</button></div>').join("");
   document.querySelectorAll("[data-boss]").forEach(el=>el.onclick=()=>{ state.bosses.splice(Number(el.dataset.boss),1); save(); fillSelects(); renderSettings(); });
   document.querySelectorAll("[data-member]").forEach(el=>el.onclick=()=>{ state.members.splice(Number(el.dataset.member),1); save(); renderSettings(); });
