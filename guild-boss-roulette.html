@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>길드 보스 정산</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg:#1b2430; --card:#232c3a; --line:#3a4658; --ink:#f4f6f8; --muted:#9aa6b5; --accent:#e2b56a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans KR",sans-serif; }
+  button,input,select { font-family:inherit; color:inherit; }
+  button { cursor:pointer; }
+  .wrap { max-width:980px; margin:0 auto; padding:28px 18px 40px; }
+  header { text-align:center; margin-bottom:18px; }
+  .kicker { color:var(--muted); letter-spacing:.18em; font-size:13px; }
+  h1 { margin:8px 0 0; font-size:34px; font-weight:600; }
+  nav { display:flex; gap:22px; border-bottom:1px solid var(--line); margin:22px 0 18px; }
+  nav button { background:none; border:0; color:var(--muted); padding:10px 0 12px; font-size:15px; }
+  nav button.active { color:var(--ink); box-shadow:inset 0 -2px 0 var(--ink); }
+  .grid { display:grid; grid-template-columns:1.1fr .9fr; gap:18px; }
+  .card { border:1px solid var(--line); border-radius:16px; padding:16px; background:#202836; }
+  label { display:block; color:var(--muted); font-size:12px; margin:12px 0 6px; }
+  input,select { width:100%; background:#1b2430; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  .line { display:grid; grid-template-columns:1fr 88px auto; gap:8px; margin-bottom:8px; }
+  .btn,.ghost,.danger { border:0; border-radius:10px; padding:10px 14px; font-weight:600; }
+  .btn { background:var(--accent); color:#1b2430; }
+  .ghost,.danger { background:transparent; color:var(--ink); border:1px solid var(--line); }
+  .danger { color:#e08b8b; }
+  .btn:disabled { opacity:.4; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .hidden { display:none !important; }
+  .wheel-wrap { min-height:360px; display:grid; place-items:center; position:relative; }
+  canvas#wheel { width:min(340px,78vw); height:min(340px,78vw); }
+  .pointer { position:absolute; top:18px; width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent; border-top:14px solid #f4f6f8; }
+  .muted { color:var(--muted); }
+  .bar { height:6px; background:#1b2430; border-radius:99px; overflow:hidden; }
+  .bar span { display:block; height:100%; background:var(--accent); }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:10px 4px; border-bottom:1px solid var(--line); }
+  .item { padding:12px 0; border-bottom:1px solid var(--line); }
+  #fx { position:fixed; inset:0; pointer-events:none; z-index:20; }
+  .modal-back { position:fixed; inset:0; background:rgba(12,16,24,.72); display:grid; place-items:center; z-index:30; }
+  .modal { width:min(380px,92vw); background:#1d2736; border:1px solid var(--line); border-radius:18px; padding:28px 22px; text-align:center; }
+  .modal h2 { margin:8px 0 12px; font-size:36px; font-weight:600; }
+  .lock { max-width:460px; margin:20px auto; }
+  @media (max-width:800px) { .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<canvas id="fx"></canvas>
+<div class="wrap">
+  <header>
+    <h1 id="title">우리 길드</h1>
+  </header>
+  <nav id="nav">
+    <button type="button" data-view="roulette" id="tabRoulette">룰렛</button>
+    <button type="button" data-view="history" class="active">기록</button>
+    <button type="button" data-view="members">길드원</button>
+    <button type="button" data-view="dps">딜량</button>
+    <button type="button" data-view="settings" id="tabSettings">설정</button>
+  </nav>
+  <p class="muted" id="roleNote"></p>
+  <section id="view-roulette" class="grid">
+    <div class="card">
+      <label>보스</label><select id="boss"></select>
+      <label>보상</label><input id="reward" placeholder="보상 이름" />
+      <div class="row"><div><label>수량</label><input id="qty" type="number" min="1" value="1" /></div><div><label>날짜</label><input id="date" type="date" /></div></div>
+      <label>참여자 · 기여도</label>
+      <div id="people"></div>
+      <div class="actions">
+        <button type="button" class="ghost" id="addPerson">참가자 추가</button>
+        <button type="button" class="ghost" id="addAll">길드원 전체</button>
+        <button type="button" class="btn" id="buildBtn">설정완료</button>
+      </div>
+      <div id="preview"></div>
+    </div>
+    <div class="card">
+      <div class="wheel-wrap"><div class="pointer"></div><canvas id="wheel" width="800" height="800"></canvas></div>
+      <p class="muted" id="wheelHint" style="text-align:center">설정완료 후 시작</p>
+      <div class="actions" style="justify-content:center"><button type="button" class="btn" id="startBtn" disabled>시작</button></div>
+    </div>
+  </section>
+  <section id="view-history" class="card hidden"><input id="q" placeholder="검색" /><div id="history"></div></section>
+  <section id="view-members" class="card hidden"><div id="memberView"></div></section>
+  <section id="view-dps" class="card hidden">
+    <div class="row"><div><label>보스</label><select id="dpsBoss"></select></div><div><label>날짜</label><input id="dpsDate" type="date" /></div></div>
+    <div id="dpsInputs"></div>
+    <div class="actions"><button type="button" class="btn" id="saveDps">딜량 저장</button></div>
+    <div id="dpsLog"></div>
+  </section>
+  <section id="view-settings" class="hidden">
+    <div class="card lock" id="lockBox">
+      <label>비밀번호</label>
+      <div class="row"><input id="pw" type="password" inputmode="numeric" /><button type="button" class="btn" id="unlock">확인</button></div>
+      <p id="pwMsg" class="muted"></p>
+    </div>
+    <div id="settingsBody" class="grid hidden">
+      <div class="card">
+        <label>길드명</label>
+        <div class="row"><input id="guildName" /><button type="button" class="btn" id="saveGuild">변경</button></div>
+        <label>보스 목록</label>
+        <div class="row"><input id="newBoss" placeholder="보스 이름" /><button type="button" class="ghost" id="addBoss">추가</button></div>
+        <div id="bossList"></div>
+        <label>길마 · 부길마</label>
+        <div class="row"><select id="leaderPick"></select><select id="vicePick"></select><select id="vicePick2"></select></div>
+        <div class="actions"><button type="button" class="btn" id="saveRoles">직책 저장</button></div>
+        <label>길드원 추가</label>
+        <div class="row"><input id="newMember" placeholder="이름" /><button type="button" class="ghost" id="addMember">추가</button></div>
+        <div id="memberEdit"></div>
+      </div>
+      <div class="card">
+        <label>파이어베이스 주소</label>
+        <input id="firebaseUrl" placeholder="https://프로젝트-default-rtdb.asia-southeast1.firebasedatabase.app" />
+        <label>공유 코드</label>
+        <input id="roomCode" placeholder="guild" />
+        <div class="actions"><button type="button" class="btn" id="saveCloud">연동 저장</button></div>
+        <p id="cloudMsg" class="muted"></p>
+        <label>백업</label>
+        <p class="muted">파이어베이스가 연결되면 주소가 달라도 같은 장부를 봅니다.</p>
+        <div class="actions">
+          <button type="button" class="ghost" id="exportJson">백업</button>
+          <button type="button" class="ghost" id="importJson">가져오기</button>
+          <button type="button" class="danger" id="relock">잠그기</button>
+          <input id="importFile" type="file" accept="application/json" class="hidden" />
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<div id="modal" class="modal-back hidden">
+  <div class="modal"><div class="muted">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="closeModal">확인</button></div></div>
+</div>
+<script>
+const KEY = "guild-boss-ledger-v3";
+const COLORS = ["#5b7c99","#3f8f86","#d08a3a","#8a6bb5","#c46b5a","#6d8f5a","#4f7ea8","#b08968"];
+const state = load();
+let people = [], ready = null, rotation = 0, spinning = false, unlocked = false, pushing = false;
+const params = new URLSearchParams(location.search);
+const leadMode = params.get("mode") === "lead";
+const queryDb = params.get("db") || "";
+const queryRoom = params.get("room") || "";
+function load(){ try { const s = JSON.parse(localStorage.getItem(KEY)||"null"); if(s&&s.members&&s.bosses) return s; } catch(e){} return { guild:"우리 길드", members:[], bosses:["악몽 보스"], history:[], dps:[], firebaseUrl:"https://cathero-91241-default-rtdb.asia-southeast1.firebasedatabase.app", room:"guild", rev:1 }; }
+if (queryDb) state.firebaseUrl = queryDb;
+if (queryRoom) state.room = queryRoom;
+function payload(){ return { guild:state.guild, members:state.members, bosses:state.bosses, history:state.history, dps:state.dps, firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1 }; }
+function save(){ state.rev=(state.rev||1)+1; state.updatedAt=Date.now(); localStorage.setItem(KEY, JSON.stringify(state)); document.getElementById("title").textContent=state.guild||"우리 길드"; pushCloud(); }
+function cloudUrl(){ const base=(state.firebaseUrl||"").trim().replace(/\/+$/,""); const room=(state.room||"guild").replace(/[.#$\[\]]/g,"-"); return base ? base+"/guild-ledger/"+encodeURIComponent(room)+".json" : ""; }
+async function pushCloud(){ const url=cloudUrl(); if(!url||pushing) return; pushing=true; try { await fetch(url,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload())}); } catch(e){} pushing=false; }
+async function pullCloud(){ const url=cloudUrl(); if(!url||spinning) return; try { const res=await fetch(url); if(!res.ok) return; const remote=await res.json(); if(!remote||!remote.members||(remote.rev||0)<=(state.rev||0)) return; Object.assign(state,remote); localStorage.setItem(KEY, JSON.stringify(state)); fillSelects(); renderPeople(); renderHistory(); renderMemberView(); renderDps(); } catch(e){} }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c => c==="&"?"&":c==="<"?"<":c===">"?">":c==='"'?"&#34;":"&#39;"); }
+document.getElementById("date").value=today(); document.getElementById("dpsDate").value=today();
+function applyRole(){
+  document.getElementById("tabRoulette").classList.toggle("hidden", !leadMode);
+  document.getElementById("tabSettings").classList.toggle("hidden", !leadMode);
+  document.getElementById("view-roulette").classList.toggle("hidden", !leadMode);
+  document.getElementById("roleNote").textContent = leadMode ? "운영 화면 · 길마, 부길마만 룰렛을 돌립니다." : "길드원 화면 · 기록과 딜량만 볼 수 있습니다.";
+  show(leadMode ? "roulette" : "history");
+}
+function show(view){ document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active", b.dataset.view===view)); ["roulette","history","members","dps","settings"].forEach(id=>document.getElementById("view-"+id).classList.toggle("hidden", id!==view)); if(view==="history") renderHistory(); if(view==="members") renderMemberView(); if(view==="dps") renderDps(); if(view==="settings") renderSettings(); }
+document.getElementById("nav").onclick=e=>{ const b=e.target.closest("button[data-view]"); if(b) show(b.dataset.view); };
+function options(list, selected){ return list.length? list.map(n=>"<option"+(n===selected?" selected":"")+">"+esc(n)+"</option>").join("") : "<option value=''>설정에서 추가</option>"; }
+function fillSelects(){ const boss=document.getElementById("boss").value, dpsBoss=document.getElementById("dpsBoss").value; document.getElementById("boss").innerHTML=options(state.bosses,boss); document.getElementById("dpsBoss").innerHTML=options(state.bosses,dpsBoss); document.getElementById("title").textContent=state.guild||"우리 길드"; }
+function remainingMembers(){ const used=new Set(people.map(p=>p.name)); return state.members.filter(m=>!used.has(m)); }
+function renderPeople(){
+  document.getElementById("people").innerHTML=people.map((p,i)=>'<div class="line"><select data-i="'+i+'">'+state.members.filter(m=>m===p.name||!people.some(x=>x.name===m)).map(m=>'<option'+(m===p.name?' selected':'')+'>'+esc(m)+'</option>').join('')+'</select><input data-i="'+i+'" data-k="score" type="number" min="0" value="'+p.score+'"><button type="button" class="danger" data-del="'+i+'">삭제</button></div>').join('') || '<p class="muted">참가자를 추가하세요.</p>';
+  document.querySelectorAll('#people select').forEach(el=>el.onchange=()=>{ people[el.dataset.i].name=el.value; ready=null; document.getElementById('startBtn').disabled=true; renderPeople(); });
+  document.querySelectorAll('#people input').forEach(el=>el.oninput=()=>{ people[el.dataset.i].score=el.value; ready=null; document.getElementById('startBtn').disabled=true; draw(); preview(); });
+  document.querySelectorAll('#people [data-del]').forEach(el=>el.onclick=()=>{ people.splice(Number(el.dataset.del),1); ready=null; document.getElementById('startBtn').disabled=true; renderPeople(); });
+  preview(); draw();
+}
+function active(){ return people.map(p=>({name:String(p.name||"").trim(), score:Number(p.score)||0})).filter(p=>p.name&&p.score>0); }
+function preview(){ const list=active(), total=list.reduce((s,p)=>s+p.score,0); document.getElementById("preview").innerHTML=list.map(p=>{ const pct=total?p.score/total*100:0; return '<div style="margin-top:8px"><div class="muted">'+esc(p.name)+" · "+p.score+" · "+pct.toFixed(1)+'%</div><div class="bar"><span style="width:'+pct+'%"></span></div></div>'; }).join(""); }
+function draw(){ const canvas=document.getElementById("wheel"), ctx=canvas.getContext("2d"), list=ready||active(), total=list.reduce((s,p)=>s+p.score,0)||1; ctx.clearRect(0,0,800,800); ctx.save(); ctx.translate(400,400); ctx.rotate(rotation); let angle=-Math.PI/2; if(!list.length){ ctx.beginPath(); ctx.arc(0,0,300,0,Math.PI*2); ctx.fillStyle="#2a3444"; ctx.fill(); } list.forEach((p,i)=>{ const slice=p.score/total*Math.PI*2; ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,300,angle,angle+slice); ctx.closePath(); ctx.fillStyle=COLORS[i%COLORS.length]; ctx.fill(); if(slice>0.25){ ctx.save(); ctx.rotate(angle+slice/2); ctx.fillStyle="#f4f6f8"; ctx.font="24px IBM Plex Sans KR, sans-serif"; ctx.textAlign="right"; ctx.fillText(p.name,260,8); ctx.restore(); } angle+=slice; }); ctx.beginPath(); ctx.arc(0,0,70,0,Math.PI*2); ctx.fillStyle="#1b2430"; ctx.fill(); ctx.restore(); }
+function build(){ const list=active(); if(!document.getElementById("boss").value) return alert("설정에서 보스를 추가하세요."); if(!document.getElementById("reward").value.trim()) return alert("보상을 입력하세요."); if(!list.length) return alert("기여도가 있는 참가자가 필요합니다."); ready=list; document.getElementById("startBtn").disabled=false; document.getElementById("wheelHint").textContent="칸 너비는 기여도 비율입니다."; draw(); }
+function pick(list){ let t=Math.random()*list.reduce((s,p)=>s+p.score,0); for(const p of list){ t-=p.score; if(t<=0) return p; } return list.at(-1); }
+function destination(list,winner){ const total=list.reduce((s,p)=>s+p.score,0); let start=-Math.PI/2; for(const p of list){ const slice=p.score/total*Math.PI*2; if(p===winner){ const land=start+slice*(0.16+Math.random()*0.68); const current=((rotation%(Math.PI*2))+Math.PI*2)%(Math.PI*2); const want=((-Math.PI/2-land)%(Math.PI*2)+Math.PI*2)%(Math.PI*2); return rotation+6*Math.PI*2+(want-current+Math.PI*2)%(Math.PI*2); } start+=slice; } return rotation; }
+function start(){ if(!ready||spinning) return alert("먼저 설정완료를 누르세요."); spinning=true; document.getElementById("startBtn").disabled=true; const winner=pick(ready), dest=destination(ready,winner), from=rotation, t0=performance.now(); const step=now=>{ const t=Math.min(1,(now-t0)/4200); rotation=from+(dest-from)*(1-Math.pow(1-t,4)); draw(); if(t<1) requestAnimationFrame(step); else done(winner); }; requestAnimationFrame(step); }
+function done(winner){ spinning=false; const total=ready.reduce((s,p)=>s+p.score,0), reward=document.getElementById("reward").value.trim(), qty=Number(document.getElementById("qty").value)||1; state.history.unshift({id:uid(), date:document.getElementById("date").value, boss:document.getElementById("boss").value, reward, qty, winner:winner.name, score:winner.score, total, ratio:winner.score/total*100, entries:ready}); save(); fireworks(); document.getElementById("winName").textContent=winner.name; document.getElementById("winDetail").innerHTML=esc(document.getElementById("boss").value)+" · "+esc(reward)+" x"+qty+"<br>기여도 "+(winner.score/total*100).toFixed(1)+"%"; document.getElementById("modal").classList.remove("hidden"); document.getElementById("startBtn").disabled=false; }
+document.getElementById("buildBtn").onclick=build; document.getElementById("startBtn").onclick=start;
+document.getElementById("addPerson").onclick=()=>{ const left=remainingMembers(); if(!left.length) return alert("추가할 길드원이 없습니다. 설정에서 등록하세요."); people.push({name:left[0],score:1}); ready=null; document.getElementById("startBtn").disabled=true; renderPeople(); };
+document.getElementById("addAll").onclick=()=>{ if(!state.members.length) return alert("설정에서 길드원을 추가하세요."); people=state.members.map(name=>({name,score:1})); ready=null; document.getElementById("startBtn").disabled=true; renderPeople(); };
+document.getElementById("closeModal").onclick=()=>document.getElementById("modal").classList.add("hidden");
+function renderHistory(){ const q=document.getElementById("q").value.trim().toLowerCase(); const rows=state.history.filter(h=>(h.boss+h.reward+h.winner).toLowerCase().includes(q)); document.getElementById("history").innerHTML=rows.length?rows.map(h=>'<article class="item"><strong>'+esc(h.winner)+"</strong> · "+h.ratio.toFixed(1)+"%"+"<br>"+esc(h.date)+" · "+esc(h.boss)+" · "+esc(h.reward)+" x"+h.qty+"</article>").join(""):"<p class='muted'>기록이 없습니다.</p>"; }
+document.getElementById("q").oninput=renderHistory;
+function roleOf(name){ const roles=[]; if(name&&name===state.leader) roles.push("길마"); if(name&&(name===state.vice||name===state.vice2)) roles.push("부길마"); return roles.join(" · "); }
+function renderMemberView(){ document.getElementById("memberView").innerHTML=state.members.length?"<table>"+state.members.map((m,i)=>"<tr><td>"+(i+1)+"</td><td>"+esc(m)+"</td><td class='muted'>"+roleOf(m)+"</td></tr>").join("")+"</table>":"<p class='muted'>설정에서 길드원을 추가하세요.</p>"; }
+function renderDps(){
+  fillSelects();
+  document.getElementById("dpsInputs").innerHTML=state.members.map(m=>'<div class="row" style="margin-top:8px"><span>'+esc(m)+'</span><input data-dps="'+esc(m)+'" type="number" min="0" placeholder="1분 딜량"></div>').join("")||"<p class='muted'>길드원을 먼저 추가하세요.</p>";
+  const bosses=[...new Set(state.dps.map(d=>d.boss).concat(state.bosses))];
+  document.getElementById("dpsLog").innerHTML=bosses.map(boss=>{
+    const rows=state.dps.filter(d=>d.boss===boss);
+    if(!rows.length) return '<article class="item"><strong>'+esc(boss)+'</strong><br><span class="muted">기록 없음</span></article>';
+    return '<article class="item"><strong>'+esc(boss)+'</strong>'+rows.map(d=>'<div style="margin-top:8px">'+esc(d.date)+'<br>'+d.entries.map(e=>esc(e.name)+' '+Number(e.dps).toLocaleString('ko-KR')).join('<br>')+'</div>').join('')+'</article>';
+  }).join('') || "<p class='muted'>저장된 딜량이 없습니다.</p>";
+}
+document.getElementById("saveDps").onclick=()=>{ const boss=document.getElementById("dpsBoss").value; if(!boss) return alert("보스를 선택하세요."); const entries=[...document.querySelectorAll("[data-dps]")].map(el=>({name:el.dataset.dps,dps:Number(el.value)||0})).filter(e=>e.dps>0); if(!entries.length) return alert("1분 딜량을 입력하세요."); state.dps.unshift({id:uid(),date:document.getElementById("dpsDate").value,boss,entries}); save(); renderDps(); };
+function renderSettings(){ document.getElementById("lockBox").classList.toggle("hidden", unlocked); document.getElementById("settingsBody").classList.toggle("hidden", !unlocked); if(!unlocked) return; document.getElementById("guildName").value=state.guild||""; document.getElementById("firebaseUrl").value=state.firebaseUrl||""; document.getElementById("roomCode").value=state.room||"guild";
+  const roleOpts="<option value=''>선택</option>"+state.members.map(m=>"<option"+(m===state.leader?" selected":"")+">"+esc(m)+"</option>").join("");
+  document.getElementById("leaderPick").innerHTML="<option value=''>길마</option>"+state.members.map(m=>"<option"+(m===state.leader?" selected":"")+">"+esc(m)+"</option>").join("");
+  document.getElementById("vicePick").innerHTML="<option value=''>부길마 1</option>"+state.members.map(m=>"<option"+(m===state.vice?" selected":"")+">"+esc(m)+"</option>").join("");
+  document.getElementById("vicePick2").innerHTML="<option value=''>부길마 2</option>"+state.members.map(m=>"<option"+(m===state.vice2?" selected":"")+">"+esc(m)+"</option>").join("");
+document.getElementById("bossList").innerHTML=state.bosses.map((b,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-boss="'+i+'">삭제</button></div>').join(""); document.getElementById("memberEdit").innerHTML=state.members.map((m,i)=>'<div class="row" style="margin-top:8px"><span>'+esc(m)+'</span><button type="button" class="danger" data-member="'+i+'">삭제</button></div>').join(""); document.querySelectorAll("[data-boss]").forEach(el=>el.onclick=()=>{ state.bosses.splice(Number(el.dataset.boss),1); save(); fillSelects(); renderSettings(); }); document.querySelectorAll("[data-member]").forEach(el=>el.onclick=()=>{ state.members.splice(Number(el.dataset.member),1); save(); renderSettings(); }); }
+document.getElementById("unlock").onclick=()=>{ if(document.getElementById("pw").value==="0101"){ unlocked=true; document.getElementById("pwMsg").textContent=""; renderSettings(); } else document.getElementById("pwMsg").textContent="비밀번호가 다릅니다."; };
+document.getElementById("pw").onkeydown=e=>{ if(e.key==="Enter") document.getElementById("unlock").click(); };
+document.getElementById("relock").onclick=()=>{ unlocked=false; document.getElementById("pw").value=""; renderSettings(); };
+document.getElementById("addBoss").onclick=()=>{ const name=document.getElementById("newBoss").value.trim(); if(!name||state.bosses.includes(name)) return; state.bosses.push(name); document.getElementById("newBoss").value=""; save(); fillSelects(); renderSettings(); };
+document.getElementById("addMember").onclick=()=>{ const name=document.getElementById("newMember").value.trim(); if(!name||state.members.includes(name)) return; state.members.push(name); document.getElementById("newMember").value=""; save(); renderSettings(); };
+document.getElementById("saveGuild").onclick=()=>{ state.guild=document.getElementById("guildName").value.trim()||"우리 길드"; save(); fillSelects(); };
+document.getElementById("saveCloud").onclick=()=>{ state.firebaseUrl=document.getElementById("firebaseUrl").value.trim().replace(/\/+$/,""); state.room=document.getElementById("roomCode").value.trim()||"guild"; save(); document.getElementById("cloudMsg").textContent=cloudUrl()?"연결했습니다. 길드원 주소에도 같은 db와 room을 붙이세요.":"주소를 비웠습니다."; };
+document.getElementById("saveRoles").onclick=()=>{ state.leader=document.getElementById("leaderPick").value; state.vice=document.getElementById("vicePick").value; state.vice2=document.getElementById("vicePick2").value; save(); renderSettings(); renderMemberView(); };
+document.getElementById("exportJson").onclick=()=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([JSON.stringify(payload(),null,2)],{type:"application/json"})); a.download="guild-ledger.json"; a.click(); };
+document.getElementById("importJson").onclick=()=>document.getElementById("importFile").click();
+document.getElementById("importFile").onchange=async e=>{ const file=e.target.files[0]; if(!file) return; const data=JSON.parse(await file.text()); if(!data.members||!data.bosses) return alert("백업 파일이 아닙니다."); Object.assign(state,data); save(); fillSelects(); renderSettings(); };
+const fx=document.getElementById("fx"), fctx=fx.getContext("2d"); let sparks=[];
+function resize(){ fx.width=innerWidth; fx.height=innerHeight; } addEventListener("resize", resize); resize();
+function fireworks(){ sparks=[]; for(let i=0;i<28;i++){ const a=Math.random()*Math.PI*2, v=1+Math.random()*2.4; sparks.push({x:innerWidth/2,y:innerHeight/2-40,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:36,color:COLORS[i%COLORS.length]}); } tick(); }
+function tick(){ fctx.clearRect(0,0,fx.width,fx.height); sparks.forEach(s=>{ s.x+=s.vx; s.y+=s.vy; s.life--; fctx.globalAlpha=Math.max(s.life/36,0); fctx.fillStyle=s.color; fctx.fillRect(s.x,s.y,3,3); }); sparks=sparks.filter(s=>s.life>0); if(sparks.length) requestAnimationFrame(tick); }
+applyRole(); fillSelects(); renderPeople(); setInterval(pullCloud,4000);
+</script>
+</body>
+</html>
