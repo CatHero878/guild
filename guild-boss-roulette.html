@@ -70,7 +70,8 @@
   .choice-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
   .choice { background:#ffd34d; color:#3a2414; border:3px solid #2b1a0e; border-radius:14px; box-shadow:0 4px 0 #2b1a0e; padding:16px 8px; font-weight:800; font-size:16px; }
   .pick-row { display:block; width:100%; text-align:left; background:#fff8e8; border:2px solid #c9843a; border-radius:12px; box-shadow:none; padding:12px; margin-top:8px; font-weight:800; color:#3a2414; }
-  .boss-pick { display:block; width:100%; text-align:left; background:#fff8e8; border:0; border-bottom:2px solid #e7cba6; border-radius:0; box-shadow:none; padding:12px 8px; font-weight:800; color:var(--ink); }
+  .group-card { margin-top:10px; }
+  .group-body { display:flex; flex-direction:column; gap:6px; max-height:240px; overflow:auto; margin-top:8px; padding:8px; background:#fff8e8; border:2px solid #e7cba6; border-radius:12px; }
   #askModal { z-index:40; }
   .muted { color:var(--muted); }
   .bar { height:8px; background:#f0d7a2; border-radius:99px; overflow:hidden; border:2px solid #2b1a0e; }
@@ -177,6 +178,9 @@
         <label>보상 목록</label>
         <div class="row"><input id="newReward" placeholder="보상 이름" /><button type="button" class="ghost" id="addReward">추가</button></div>
         <div id="rewardList"></div>
+        <label>그룹</label>
+        <div class="row"><input id="newGroup" placeholder="모자, 장갑, 점령지" /><button type="button" class="ghost" id="addGroup">그룹 추가</button></div>
+        <div id="groupList"></div>
         <label>길드원 추가</label>
         <div class="row"><input id="newMember" placeholder="이름" /><button type="button" class="ghost" id="addMember">추가</button></div>
         <div id="memberEdit"></div>
@@ -292,7 +296,7 @@ function ensureOccupation(){
   if (String(state.bossFloors["점령전보상"]) !== "4") { state.bossFloors["점령전보상"] = "4"; changed = true; }
   return changed;
 }
-if (ensureOccupation()) save();
+if (ensureOccupation() || ensureGroups()) save();
 if (queryDb) state.firebaseUrl = queryDb;
 if (queryRoom) state.room = queryRoom;
 function payload(){
@@ -300,6 +304,7 @@ function payload(){
     guild:state.guild, members:state.members, bosses:state.bosses, rewards:state.rewards||[],
     leader:state.leader||"", vice:state.vice||"", vice2:state.vice2||"",
     history:state.history, dps:state.dps, dpsByBoss:state.dpsByBoss||{}, bossFloors:state.bossFloors||{},
+    groups:state.groups||[], groupItems:state.groupItems||{},
     schedule:state.schedule||null, schedules:state.schedules||[], firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1
   };
 }
@@ -337,7 +342,8 @@ async function pullCloud(){
     if (!state.bossFloors) state.bossFloors = {};
     if (!state.history) state.history = [];
     if (!Array.isArray(state.schedules)) state.schedules = [];
-    if (ensureOccupation()) save();
+    const madeGroups = ensureGroups();
+    if (ensureOccupation() || madeGroups) save();
     else localStorage.setItem(KEY, JSON.stringify(state));
     adoptSchedule();
     fillSelects();
@@ -478,12 +484,28 @@ function rewardCategory(name){
 }
 function rewardGroups(){
   const map = new Map();
+  (state.groups || []).forEach(g => {
+    const names = ((state.groupItems||{})[g] || []).filter(n => (state.rewards||[]).includes(n));
+    if (names.length) map.set(g, names);
+  });
+  const placed = new Set();
+  map.forEach(names => names.forEach(n => placed.add(n)));
+  const loose = (state.rewards || []).filter(n => !placed.has(n));
+  if (loose.length) map.set("미분류", loose);
+  return [...map.entries()];
+}
+function ensureGroups(){
+  if (Array.isArray(state.groups) && state.groupItems && typeof state.groupItems === "object") return false;
+  const map = {};
+  const order = [];
   (state.rewards || []).forEach(name => {
     const cat = rewardCategory(name);
-    if (!map.has(cat)) map.set(cat, []);
-    map.get(cat).push(name);
+    if (!map[cat]) { map[cat] = []; order.push(cat); }
+    map[cat].push(name);
   });
-  return [...map.entries()];
+  state.groups = order;
+  state.groupItems = map;
+  return true;
 }
 let askAction = null;
 let pickMode = "";
@@ -1323,6 +1345,10 @@ document.getElementById("saveDps").onclick = () => {
   save();
   alert("저장했습니다.");
 };
+function groupsOf(name){
+  return (state.groups || []).filter(g => ((state.groupItems||{})[g] || []).includes(name));
+}
+let openGroup = "";
 function renderSettings(){
   document.getElementById("guildName").value = state.guild || "";
   document.getElementById("firebaseUrl").value = state.firebaseUrl || "";
@@ -1364,14 +1390,47 @@ function renderSettings(){
       renderSettings();
     });
   });
-  document.getElementById("rewardList").innerHTML = (state.rewards||[]).map((b,i) => '<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-reward="'+i+'">삭제</button></div>').join("");
+  document.getElementById("rewardList").innerHTML = (state.rewards||[]).map((b,i) => '<div class="row" style="margin-top:8px"><span>'+esc(b)+(groupsOf(b).length?'<span class="muted"> · '+esc(groupsOf(b).join(", "))+'</span>':"")+'</span><button type="button" class="danger" data-reward="'+i+'">삭제</button></div>').join("");
   document.querySelectorAll("[data-reward]").forEach(el => el.onclick = () => {
     const i = Number(el.dataset.reward);
     const name = state.rewards[i];
     askDelete((name||"보상")+"을 목록에서 지울까요?", () => {
       state.rewards.splice(i, 1);
+      (state.groups||[]).forEach(g => {
+        if (state.groupItems && state.groupItems[g]) state.groupItems[g] = state.groupItems[g].filter(n => n !== name);
+      });
       save();
       fillSelects();
+      renderSettings();
+    });
+  });
+  const groups = state.groups || [];
+  document.getElementById("groupList").innerHTML = groups.length ? groups.map(g => {
+    const items = ((state.groupItems||{})[g] || []).filter(n => (state.rewards||[]).includes(n));
+    const open = openGroup === g;
+    const body = open ? '<div class="group-body">'+(state.rewards||[]).map(n => '<label class="inline"><input type="checkbox" data-gitem="'+esc(g)+'" data-gname="'+esc(n)+'"'+((items.includes(n))?" checked":"")+">"+esc(n)+"</label>").join("")+"</div>" : "";
+    return '<div class="group-card"><div style="display:flex;gap:8px;align-items:center"><button type="button" class="floor-tab'+(open?" on":"")+'" data-group="'+esc(g)+'" style="flex:1">'+esc(g)+" "+items.length+'</button><button type="button" class="danger" data-del-group="'+esc(g)+'" style="flex:0 0 auto">삭제</button></div>'+body+"</div>";
+  }).join("") : "<p class='muted'>그룹을 추가하세요.</p>";
+  document.querySelectorAll("[data-group]").forEach(el => el.onclick = () => {
+    openGroup = openGroup === el.dataset.group ? "" : el.dataset.group;
+    renderSettings();
+  });
+  document.querySelectorAll("[data-gitem]").forEach(el => el.onchange = () => {
+    const g = el.dataset.gitem;
+    const n = el.dataset.gname;
+    if (!state.groupItems[g]) state.groupItems[g] = [];
+    state.groupItems[g] = state.groupItems[g].filter(x => x !== n);
+    if (el.checked) state.groupItems[g].push(n);
+    save();
+    renderSettings();
+  });
+  document.querySelectorAll("[data-del-group]").forEach(el => el.onclick = () => {
+    const g = el.dataset.delGroup;
+    askDelete(g+" 그룹을 지울까요? 보상은 남습니다.", () => {
+      state.groups = (state.groups||[]).filter(x => x !== g);
+      if (state.groupItems) delete state.groupItems[g];
+      if (openGroup === g) openGroup = "";
+      save();
       renderSettings();
     });
   });
@@ -1395,6 +1454,19 @@ document.getElementById("addReward").onclick = () => {
   document.getElementById("newReward").value = "";
   save();
   fillSelects();
+  renderSettings();
+};
+document.getElementById("addGroup").onclick = () => {
+  const name = document.getElementById("newGroup").value.trim();
+  if (!name) return;
+  if (!Array.isArray(state.groups)) state.groups = [];
+  if (!state.groupItems) state.groupItems = {};
+  if (state.groups.includes(name)) return;
+  state.groups.push(name);
+  state.groupItems[name] = [];
+  document.getElementById("newGroup").value = "";
+  openGroup = name;
+  save();
   renderSettings();
 };
 document.getElementById("addMember").onclick = () => {
