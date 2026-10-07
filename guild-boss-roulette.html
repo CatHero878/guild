@@ -623,7 +623,7 @@ function renderRewardRows(){
     const share = r.mode === "share" && on;
     const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
     const label = r.name || "보상 선택";
-    return '<div class="reward-line"><button type="button" class="ghost pickbtn" data-rp="'+i+'">'+esc(label)+'</button><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
+    return '<div class="reward-line"><button type="button" class="ghost pickbtn" data-rp="'+i+'">'+esc(label)+'</button><input data-rq="'+i+'" type="number" min="1" enterkeyhint="next" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
   }).join("");
   box.querySelectorAll("[data-rp]").forEach(el => el.onclick = () => openRewardPick(Number(el.dataset.rp)));
   box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => {
@@ -639,6 +639,14 @@ function renderRewardRows(){
       b.className = "modebtn " + (picked ? "btn" : "ghost");
     });
   });
+  box.querySelectorAll("[data-rq]").forEach(el => el.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const inputs = [...box.querySelectorAll("[data-rq]")];
+    const next = inputs[inputs.indexOf(el) + 1];
+    if (next) next.focus();
+    else el.blur();
+  }));
   box.querySelectorAll("[data-rm]").forEach(el => el.onclick = () => {
     const i = Number(el.dataset.ri);
     if (Math.floor(Number(rewardDraft[i].qty)||0) < 2) return;
