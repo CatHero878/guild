@@ -709,14 +709,39 @@ function adoptSchedule(){
   state.schedules = state.schedules.filter(s => s && !s.done && s.id && !recorded(s.id));
   state.schedule = null;
 }
+function splitByScore(qty, list){
+  const q = Math.floor(Number(qty)||0);
+  const rows = list.filter(p => p && p.name && Number(p.score) > 0);
+  const total = rows.reduce((s,p) => s + Number(p.score), 0);
+  if (!rows.length || q <= 0 || total <= 0) return [];
+  const out = rows.map(p => {
+    const exact = Number(p.score) / total * q;
+    const base = Math.floor(exact);
+    return {name:p.name, qty:base, frac:exact - base, tie:Math.random()};
+  });
+  let rem = q - out.reduce((s,r) => s + r.qty, 0);
+  out.sort((a,b) => b.frac - a.frac || a.tie - b.tie);
+  for (let i = 0; i < rem; i++) out[i].qty += 1;
+  return out.filter(r => r.qty > 0).map(r => ({name:r.name, qty:r.qty})).sort((a,b) => b.qty - a.qty);
+}
+function shareParts(r){
+  if (r.split && r.split.length) return r.split;
+  if (!Array.isArray(r.draws)) return [];
+  const tally = {};
+  r.draws.forEach(n => { tally[n] = (tally[n]||0) + 1; });
+  return Object.keys(tally).map(name => ({name, qty:tally[name]})).sort((a,b) => b.qty - a.qty);
+}
 function spinQueue(item){
   const list = normalizeRewards(item);
   const queue = [];
   list.forEach(r => {
     if (r.even) return;
-    if (r.mode === "share" && Array.isArray(r.draws) && r.draws.length) {
-      r.draws.forEach((name, i) => queue.push({reward:r.name+" "+(i+1)+"/"+r.draws.length, qty:1, winner:name, score:0}));
-      return;
+    if (r.mode === "share") {
+      const parts = shareParts(r);
+      if (parts.length) {
+        parts.forEach(s => queue.push({reward:r.name+" "+s.qty+"개", qty:s.qty, winner:s.name, score:0}));
+        return;
+      }
     }
     if (r.winner) queue.push({reward:r.name, qty:r.qty, winner:r.winner, score:r.score||0});
   });
@@ -901,11 +926,7 @@ function build(){
       r.split = splitEven(r.qty, r.recipients);
       r.winner = "";
     } else if (r.mode === "share") {
-      r.draws = [];
-      for (let i = 0; i < r.qty; i++) r.draws.push(pick(list).name);
-      const tally = {};
-      r.draws.forEach(n => { tally[n] = (tally[n]||0) + 1; });
-      r.split = Object.keys(tally).map(name => ({name, qty:tally[name]})).sort((a,b) => b.qty - a.qty);
+      r.split = splitByScore(r.qty, list);
       r.winner = "";
       r.recipients = [];
     } else {
