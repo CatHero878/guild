@@ -619,7 +619,7 @@ function renderRewardRows(){
     const on = q >= 2 && !r.even;
     const share = r.mode === "share" && on;
     const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
-    return '<div class="reward-line"><span class="reward-name">'+esc(r.name)+'</span><input data-rq="'+i+'" type="number" min="1" enterkeyhint="next" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type="button" class="danger" data-rd="'+i+'">삭제</button></div>'+note;
+    return '<div class="reward-line"><span class="reward-name">'+esc(r.name)+'</span><input data-rq="'+i+'" type="number" min="1" enterkeyhint="next" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+'>균등분배</label><button type="button" class="danger" data-rd="'+i+'">삭제</button></div>'+note;
   }).join("");
   box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => {
     const i = Number(el.dataset.rq);
