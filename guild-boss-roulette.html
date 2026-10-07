@@ -76,7 +76,7 @@
   .item { padding:12px 0; border-bottom:2px solid #e7cba6; }
   #fx { position:fixed; inset:0; pointer-events:none; z-index:20; }
   .modal-back { position:fixed; inset:0; background:rgba(30,20,10,.45); display:grid; place-items:center; z-index:30; }
-  .modal { width:min(460px,92vw); background:#fff4d8; border:5px solid #2b1a0e; border-radius:16px; padding:22px; text-align:center; box-shadow:0 8px 0 #2b1a0e; }
+  .modal { width:min(460px,92vw); max-height:86vh; overflow:auto; background:#fff4d8; border:5px solid #2b1a0e; border-radius:16px; padding:22px; text-align:center; box-shadow:0 8px 0 #2b1a0e; }
   .modal h2 { margin:8px 0 12px; font-size:32px; font-weight:800; }
   #splitPeople { max-height:46vh; overflow:auto; text-align:left; margin-top:8px; }
   #splitPeople label.inline { margin:8px 0; }
@@ -199,6 +199,7 @@
     <h2 id="resultBoss" style="font-size:26px"></h2>
     <div id="resultBody"></div>
     <div class="actions" style="justify-content:center">
+      <button type="button" class="ghost hidden" id="resultBack">뒤로</button>
       <button type="button" class="btn" id="resultShare">카카오톡 공유</button>
       <button type="button" class="btn" id="resultReplay">룰렛 돌리기</button>
       <button type="button" class="ghost" id="resultClose">닫기</button>
@@ -1101,11 +1102,58 @@ async function shareKakao(item){
   alert("이 화면에서는 카카오톡 앱을 바로 열 수 없습니다. 휴대폰에서 공유해 주세요.");
 }
 let currentResult = null;
+let resultView = "home";
+let resultKey = "";
+function takenOf(r){
+  if (r.split && r.split.length) return r.split.map(s => ({name:s.name, qty:Number(s.qty)||0})).filter(s => s.name && s.qty);
+  if (r.winner) return [{name:r.winner, qty:r.qty||1}];
+  return [];
+}
+function renderResult(){
+  const row = currentResult;
+  const box = document.getElementById("resultBody");
+  const back = document.getElementById("resultBack");
+  if (!row || !box) return;
+  back.classList.toggle("hidden", resultView === "home");
+  const rewards = normalizeRewards(row);
+  if (resultView === "home") {
+    box.innerHTML = '<div class="actions" style="justify-content:center"><button type="button" class="btn" id="viewRewards">보상명</button><button type="button" class="btn" id="viewNames">닉네임</button></div>';
+    document.getElementById("viewRewards").onclick = () => { resultView = "rewards"; renderResult(); };
+    document.getElementById("viewNames").onclick = () => { resultView = "names"; renderResult(); };
+    return;
+  }
+  if (resultView === "rewards") {
+    box.innerHTML = rewards.length ? rewards.map((r,i) => '<button type="button" class="boss-pick" data-rr="'+i+'">'+esc(r.name)+"</button>").join("") : "<p class='muted'>보상이 없습니다.</p>";
+    box.querySelectorAll("[data-rr]").forEach(el => el.onclick = () => { resultKey = el.dataset.rr; resultView = "rewardDetail"; renderResult(); });
+    return;
+  }
+  if (resultView === "rewardDetail") {
+    const r = rewards[Number(resultKey)];
+    if (!r) { resultView = "rewards"; renderResult(); return; }
+    box.innerHTML = '<div class="muted">'+esc(r.name)+" x"+(r.qty||1)+"</div>"+takenOf(r).map(s => '<div class="boss-pick">'+esc(s.name)+" "+s.qty+"</div>").join("");
+    return;
+  }
+  const byName = new Map();
+  rewards.forEach(r => takenOf(r).forEach(s => {
+    if (!byName.has(s.name)) byName.set(s.name, []);
+    byName.get(s.name).push({reward:r.name, qty:s.qty});
+  }));
+  if (resultView === "names") {
+    const names = [...byName.entries()].sort((a,b) => b[1].reduce((s,x)=>s+x.qty,0) - a[1].reduce((s,x)=>s+x.qty,0));
+    box.innerHTML = names.length ? names.map(([n]) => '<button type="button" class="boss-pick" data-nn="'+esc(n)+'">'+esc(n)+"</button>").join("") : "<p class='muted'>없습니다.</p>";
+    box.querySelectorAll("[data-nn]").forEach(el => el.onclick = () => { resultKey = el.dataset.nn; resultView = "nameDetail"; renderResult(); });
+    return;
+  }
+  const mine = byName.get(resultKey) || [];
+  box.innerHTML = '<div class="muted">'+esc(resultKey)+"</div>"+mine.map(s => '<div class="boss-pick">'+esc(s.reward)+" "+s.qty+"</div>").join("");
+}
 function openResult(row){
   currentResult = row;
+  resultView = "home";
+  resultKey = "";
   document.getElementById("resultWhen").textContent = row.date || String(fmt(row.startAt)).slice(0,10);
   document.getElementById("resultBoss").textContent = row.boss || "";
-  document.getElementById("resultBody").innerHTML = rewardLines(row, true);
+  renderResult();
   document.getElementById("resultModal").classList.remove("hidden");
 }
 function renderHistory(){
@@ -1137,6 +1185,12 @@ function renderHistory(){
 document.getElementById("q").oninput = renderHistory;
 document.getElementById("resultShare").onclick = () => shareKakao(currentResult);
 document.getElementById("resultClose").onclick = () => document.getElementById("resultModal").classList.add("hidden");
+document.getElementById("resultBack").onclick = () => {
+  if (resultView === "rewardDetail") resultView = "rewards";
+  else if (resultView === "nameDetail") resultView = "names";
+  else resultView = "home";
+  renderResult();
+};
 document.getElementById("resultReplay").onclick = () => {
   const row = currentResult;
   document.getElementById("resultModal").classList.add("hidden");
