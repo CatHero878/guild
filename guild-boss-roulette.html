@@ -53,18 +53,24 @@
   #queueList { max-width:680px; margin:8px auto 0; }
   .q-item { background:#fff4d8; border:4px solid #2b1a0e; border-radius:16px; padding:12px 14px; margin-top:10px; box-shadow:0 5px 0 #2b1a0e; }
   #wheelStage { position:fixed; inset:0; z-index:25; display:grid; place-items:center; background:rgba(12,28,18,.55); padding:16px; }
-  #wheelStage .card { width:min(560px,96vw); animation:wheelPop .28s ease; }
+  #wheelStage .card { width:min(980px,98vw); max-height:96vh; overflow:auto; animation:wheelPop .28s ease; }
   @keyframes wheelPop { from { transform:scale(.62); opacity:.35; } to { transform:scale(1); opacity:1; } }
-  .wheel-wrap { min-height:360px; display:grid; place-items:center; position:relative; }
-  canvas#wheel { width:min(340px,78vw); height:min(340px,78vw); }
-  .pointer { position:absolute; top:18px; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-top:16px solid #2b1a0e; }
+  .wheel-grid { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
+  .wheel-one { width:min(340px,86vw); }
+  .wheel-grid.multi .wheel-one { width:min(230px,46vw); }
+  .wheel-label { text-align:center; font-weight:800; margin-bottom:4px; }
+  .wheel-wrap { min-height:0; display:grid; place-items:center; position:relative; }
+  .wheel-one canvas { width:100%; height:auto; display:block; }
+  .pointer { position:absolute; top:4px; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-top:16px solid #2b1a0e; }
+  .hist-box { position:relative; border-bottom:2px solid #e7cba6; }
+  button.hist { display:block; width:100%; text-align:left; background:transparent; border:0; box-shadow:none; border-radius:0; padding:12px 36px 12px 4px; font-weight:800; color:var(--ink); }
+  .hist-x { position:absolute; top:8px; right:0; width:28px; height:28px; padding:0; border-radius:8px; }
   .muted { color:var(--muted); }
   .bar { height:8px; background:#f0d7a2; border-radius:99px; overflow:hidden; border:2px solid #2b1a0e; }
   .bar span { display:block; height:100%; background:#e07a3d; }
   table { width:100%; border-collapse:collapse; }
   td { padding:10px 4px; border-bottom:2px solid #e7cba6; }
   .item { padding:12px 0; border-bottom:2px solid #e7cba6; }
-  button.hist { display:block; width:100%; text-align:left; background:transparent; border:0; border-bottom:2px solid #e7cba6; box-shadow:none; border-radius:0; padding:12px 4px; font-weight:800; color:var(--ink); }
   #fx { position:fixed; inset:0; pointer-events:none; z-index:20; }
   .modal-back { position:fixed; inset:0; background:rgba(30,20,10,.45); display:grid; place-items:center; z-index:30; }
   .modal { width:min(460px,92vw); background:#fff4d8; border:5px solid #2b1a0e; border-radius:16px; padding:22px; text-align:center; box-shadow:0 8px 0 #2b1a0e; }
@@ -142,18 +148,17 @@
   <section id="view-settings" class="hidden">
     <div id="settingsBody" class="grid">
       <div class="card">
-        <label>기록 초기화</label>
-        <div class="actions"><button type="button" class="danger" id="resetRecords">기록 초기화</button></div>
         <label>길드명</label>
         <div class="row"><input id="guildName" /><button type="button" class="btn" id="saveGuild">변경</button></div>
         <label>보스 목록</label>
         <div class="row">
           <input id="newBoss" placeholder="보스 이름" />
           <select id="newBossFloor">
-            <option value="0">격전지(하층)</option>
-            <option value="1" selected>격전지(1층)</option>
-            <option value="2">격전지(2층)</option>
-            <option value="3">격전지(3층)</option>
+            <option value="0">격전지하층</option>
+            <option value="1" selected>격전지</option>
+            <option value="5">격전지상층(1구역)</option>
+            <option value="2">격전지상층(2구역)</option>
+            <option value="3">격전지상층(3구역)</option>
             <option value="4">점령전</option>
           </select>
           <button type="button" class="ghost" id="addBoss">추가</button>
@@ -211,8 +216,7 @@
 <div id="wheelStage" class="hidden">
   <div class="card">
     <div id="spinInfo" style="text-align:center;font-weight:800"></div>
-    <div class="wheel-wrap"><div class="pointer"></div><canvas id="wheel" width="800" height="800"></canvas></div>
-    <p id="wheelHint" style="text-align:center;font-weight:800"></p>
+    <div id="wheelGrid" class="wheel-grid"></div>
   </div>
 </div>
 <div id="splitModal" class="modal-back hidden">
@@ -230,10 +234,11 @@
 const KEY = "guild-boss-ledger-v3";
 const COLORS = ["#5b7c99","#3f8f86","#d08a3a","#8a6bb5","#c46b5a","#6d8f5a","#4f7ea8","#b08968"];
 const FLOORS = [
-  {id:"0", label:"격전지(하층)"},
-  {id:"1", label:"격전지(1층)"},
-  {id:"2", label:"격전지(2층)"},
-  {id:"3", label:"격전지(3층)"},
+  {id:"0", label:"격전지하층"},
+  {id:"1", label:"격전지"},
+  {id:"5", label:"격전지상층(1구역)"},
+  {id:"2", label:"격전지상층(2구역)"},
+  {id:"3", label:"격전지상층(3구역)"},
   {id:"4", label:"점령전"}
 ];
 const state = load();
@@ -347,11 +352,11 @@ function guessFloor(name){
   const n = String(name||"");
   if (/점령/.test(n)) return "4";
   if (/바나냥|루나|루니|루이/.test(n)) return "2";
-  if (/해적|고양이|음식|늑대/.test(n)) return "1";
+  if (/상층\s*1|1구역/.test(n)) return "5";
+  if (/상층\s*3|3구역|3층/.test(n)) return "3";
+  if (/상층\s*2|2구역|2층/.test(n)) return "2";
   if (/하층/.test(n)) return "0";
-  if (/3층/.test(n)) return "3";
-  if (/2층/.test(n)) return "2";
-  if (/1층/.test(n)) return "1";
+  if (/해적|고양이|음식|늑대/.test(n)) return "1";
   return "1";
 }
 function floorOf(name){
@@ -360,7 +365,7 @@ function floorOf(name){
 }
 function floorLabel(id){
   const f = FLOORS.find(x => x.id === String(id));
-  return f ? f.label : "격전지(1층)";
+  return f ? f.label : "격전지";
 }
 document.getElementById("caughtDate").value = today();
 document.getElementById("runDate").value = today();
@@ -560,21 +565,20 @@ function preview(){
     return '<div style="margin-top:8px"><div class="muted">'+esc(p.name)+" · "+p.score+" · "+pct.toFixed(1)+'%</div><div class="bar"><span style="width:'+pct+'%"></span></div></div>';
   }).join("");
 }
-function draw(){
-  const canvas = document.getElementById("wheel");
+function paintWheel(canvas, list, rot){
+  if (!canvas) return;
   const ctx = canvas.getContext("2d");
-  const setupOpen = !document.getElementById("setupCard").classList.contains("hidden");
-  const list = (!spinning && setupOpen) ? active() : (ready || []);
-  const total = list.reduce((s,p) => s+p.score, 0) || 1;
+  const rows = list || [];
+  const total = rows.reduce((s,p) => s+p.score, 0) || 1;
   ctx.clearRect(0,0,800,800);
   ctx.save();
   ctx.translate(400,400);
-  ctx.rotate(rotation);
+  ctx.rotate(rot||0);
   let angle = -Math.PI/2;
-  if (!list.length) {
+  if (!rows.length) {
     ctx.beginPath(); ctx.arc(0,0,300,0,Math.PI*2); ctx.fillStyle = "#fff4d8"; ctx.fill(); ctx.strokeStyle = "#2b1a0e"; ctx.lineWidth = 8; ctx.stroke();
   }
-  list.forEach((p,i) => {
+  rows.forEach((p,i) => {
     const slice = p.score/total*Math.PI*2;
     ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0,0,300,angle,angle+slice); ctx.closePath();
     ctx.fillStyle = COLORS[i%COLORS.length]; ctx.fill();
@@ -589,6 +593,7 @@ function draw(){
   ctx.beginPath(); ctx.arc(0,0,70,0,Math.PI*2); ctx.fillStyle = "#fff4d8"; ctx.fill(); ctx.lineWidth = 8; ctx.strokeStyle = "#2b1a0e"; ctx.stroke();
   ctx.restore();
 }
+function draw(){}
 function normalizeRewards(item){
   if (!item) return [];
   if (item.rewards && item.rewards.length && typeof item.rewards[0] === "object") return item.rewards;
@@ -792,29 +797,38 @@ function spinQueue(item){
   return [{reward:(list[0] && list[0].name) || "", winner:item.winner, score:item.score||0}];
 }
 function playQueue(list, queue, done, boss){
-  let i = 0;
-  const step = () => {
-    if (i >= queue.length) {
-      document.getElementById("wheelHint").textContent = "";
-      done();
-      return;
-    }
-    const item = queue[i++];
-    document.getElementById("spinInfo").textContent = boss || "";
-    document.getElementById("wheelHint").textContent = item.reward || "";
-    animateTo(list, item.winner, step);
+  document.getElementById("spinInfo").textContent = boss || "";
+  const grid = document.getElementById("wheelGrid");
+  if (!queue.length) { grid.innerHTML = ""; done(); return; }
+  grid.classList.toggle("multi", queue.length > 1);
+  grid.innerHTML = queue.map((item,i) => '<div class="wheel-one"><div class="wheel-label">'+esc(item.reward||"")+'</div><div class="wheel-wrap"><div class="pointer"></div><canvas data-wheel="'+i+'" width="800" height="800"></canvas></div></div>').join("");
+  const wheels = queue.map((item,i) => ({canvas:grid.querySelector('[data-wheel="'+i+'"]'), winner:item.winner, rot:0}));
+  spinning = true;
+  ready = list;
+  const anims = wheels.map(w => ({w, from:0, dest:destination(list, w.winner, 0)}));
+  const t0 = performance.now();
+  const step = now => {
+    const t = Math.min(1, (now-t0)/4200);
+    const ease = 1-Math.pow(1-t,4);
+    anims.forEach(a => {
+      a.w.rot = a.from + (a.dest-a.from)*ease;
+      paintWheel(a.w.canvas, list, a.w.rot);
+    });
+    if (t < 1) requestAnimationFrame(step);
+    else { spinning = false; done(); }
   };
-  if (!queue.length) done();
-  else step();
+  anims.forEach(a => paintWheel(a.w.canvas, list, 0));
+  requestAnimationFrame(step);
 }
 function pick(list){
   let t = Math.random()*list.reduce((s,p) => s+p.score, 0);
   for (const p of list) { t -= p.score; if (t <= 0) return p; }
   return list[list.length-1];
 }
-function destination(list, winnerName){
+function destination(list, winnerName, rot){
   const total = list.reduce((s,p) => s+p.score, 0);
   let start = -Math.PI/2;
+  const rotation = rot || 0;
   for (const p of list) {
     const slice = p.score/total*Math.PI*2;
     if (p.name === winnerName) {
@@ -827,22 +841,7 @@ function destination(list, winnerName){
   }
   return rotation + 6*Math.PI*2;
 }
-function animateTo(list, winnerName, onDone){
-  if (!list || !list.length || spinning) return;
-  spinning = true;
-  ready = list;
-  const dest = destination(list, winnerName);
-  const from = rotation;
-  const t0 = performance.now();
-  const step = now => {
-    const t = Math.min(1, (now-t0)/4200);
-    rotation = from + (dest-from)*(1-Math.pow(1-t,4));
-    draw();
-    if (t < 1) requestAnimationFrame(step);
-    else { spinning = false; onDone(); }
-  };
-  requestAnimationFrame(step);
-}
+function animateTo(){}
 function showWinner(s, replay){
   fireworks();
   const rewards = normalizeRewards(s);
@@ -908,8 +907,6 @@ function trySpin(){
   ready = due.entries;
   document.getElementById("wheelStage").classList.remove("hidden");
   document.getElementById("spinInfo").textContent = due.boss || "";
-  document.getElementById("wheelHint").textContent = "";
-  draw();
   const queue = spinQueue(due);
   if (!queue.length) { finishSchedule(); return; }
   playQueue(due.entries, queue, finishSchedule, due.boss);
@@ -920,7 +917,6 @@ function startReplay(row){
   ready = row.entries || [];
   document.getElementById("wheelStage").classList.remove("hidden");
   document.getElementById("spinInfo").textContent = row.boss || "";
-  document.getElementById("wheelHint").textContent = "";
   const queue = spinQueue(row);
   if (!queue.length) { showWinner(row, true); return; }
   playQueue(row.entries || [], queue, () => showWinner(row, true), row.boss);
@@ -1084,11 +1080,19 @@ function renderHistory(){
   });
   document.getElementById("history").innerHTML = rows.length ? rows.map(h => {
     const when = h.date || String(fmt(h.startAt)).slice(0,10);
-    return '<button type="button" class="hist" data-hist="'+h.id+'">'+esc(when)+" · "+esc(h.boss||"")+"<br>"+esc(rewardNames(h))+"</button>";
+    const x = leadMode ? '<button type="button" class="danger hist-x" data-del-hist="'+h.id+'">×</button>' : "";
+    return '<div class="hist-box">'+x+'<button type="button" class="hist" data-hist="'+h.id+'">'+esc(when)+" · "+esc(h.boss||"")+"<br>"+esc(rewardNames(h))+"</button></div>";
   }).join("") : "";
   document.querySelectorAll("[data-hist]").forEach(el => el.onclick = () => {
     const row = state.history.find(h => h.id === el.dataset.hist);
     if (row) openResult(row);
+  });
+  document.querySelectorAll("[data-del-hist]").forEach(el => el.onclick = e => {
+    e.stopPropagation();
+    if (!leadMode || spinning) return;
+    state.history = state.history.filter(h => h.id !== el.dataset.delHist);
+    save();
+    renderHistory();
   });
 }
 document.getElementById("q").oninput = renderHistory;
@@ -1231,19 +1235,6 @@ document.getElementById("saveRoles").onclick = () => {
   save();
   renderSettings();
   renderMemberView();
-};
-document.getElementById("resetRecords").onclick = () => {
-  if (!confirm("당첨 기록과 딜량을 지울까요? 길드원과 보스는 남습니다.")) return;
-  state.history = [];
-  state.dps = [];
-  state.dpsByBoss = {};
-  state.schedule = null;
-  state.schedules = [];
-  save();
-  showSchedule();
-  renderHistory();
-  renderDps();
-  alert("초기화했습니다.");
 };
 document.getElementById("exportJson").onclick = () => {
   const a = document.createElement("a");
