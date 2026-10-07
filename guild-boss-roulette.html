@@ -198,7 +198,7 @@
   </div>
 </div>
 <div id="modal" class="modal-back hidden">
-  <div class="modal"><div class="muted" id="winKicker">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="shareResult">카카오톡 공유</button><button type="button" class="btn" id="closeModal">확인</button></div></div>
+  <div class="modal"><div class="muted" id="winKicker">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><p style="font-weight:800;margin:14px 0 0">카카오톡에 공유할까요?</p><div class="actions" style="justify-content:center"><button type="button" class="btn" id="shareYes">예</button><button type="button" class="ghost" id="closeModal">아니오</button></div></div>
 </div>
 <div id="pickModal" class="modal-back hidden">
   <div class="modal" style="text-align:left">
@@ -1021,12 +1021,18 @@ document.getElementById("runNow").onchange = () => {
   ["runDate","runHour","runMinute"].forEach(id => { document.getElementById(id).disabled = on; });
 };
 document.getElementById("cancelSetup").onclick = hideSetup;
-document.getElementById("closeModal").onclick = () => {
+function closeWinner(){
   document.getElementById("modal").classList.add("hidden");
   document.getElementById("wheelStage").classList.add("hidden");
   holdSpin = false;
   if (!spinning) showSchedule();
   trySpin();
+}
+document.getElementById("closeModal").onclick = closeWinner;
+document.getElementById("shareYes").onclick = () => {
+  const item = currentResult;
+  closeWinner();
+  shareKakao(item);
 };
 function rewardNames(item){
   return normalizeRewards(item).map(r => r.name).filter(Boolean).join(", ");
@@ -1083,7 +1089,6 @@ function renderHistory(){
   });
 }
 document.getElementById("q").oninput = renderHistory;
-document.getElementById("shareResult").onclick = () => shareKakao(currentResult);
 document.getElementById("resultShare").onclick = () => shareKakao(currentResult);
 document.getElementById("resultClose").onclick = () => document.getElementById("resultModal").classList.add("hidden");
 document.getElementById("resultReplay").onclick = () => {
