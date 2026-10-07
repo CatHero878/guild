@@ -117,7 +117,6 @@
         <div class="actions">
           <button type="button" class="ghost" id="addPerson">참가자 추가</button>
           <button type="button" class="ghost" id="addAll">길드원 전체</button>
-          <button type="button" class="btn" id="buildBtn">설정완료</button>
           <button type="button" class="ghost" id="cancelSetup">닫기</button>
         </div>
         <div id="preview"></div>
@@ -125,6 +124,7 @@
     </div>
     <div id="leadBar" class="actions hidden" style="justify-content:center">
       <button type="button" class="btn" id="addRoulette">룰렛 추가</button>
+      <button type="button" class="btn hidden" id="buildBtn">설정완료</button>
     </div>
     <div id="queueList"></div>
   </section>
@@ -192,7 +192,7 @@
     <div id="pickTitle">선택</div>
     <div id="pickFloors" class="actions"></div>
     <div id="pickList"></div>
-    <div class="actions"><button type="button" class="ghost" id="pickClose">닫기</button></div>
+    <div class="actions"><button type="button" class="btn hidden" id="pickDone">완료</button><button type="button" class="ghost" id="pickClose">닫기</button></div>
   </div>
 </div>
 <div id="wheelStage" class="hidden">
@@ -378,10 +378,14 @@ function applyRole(){
 function hideSetup(){
   document.getElementById("setupCard").classList.add("hidden");
   document.getElementById("rouletteGrid").classList.add("solo");
+  document.getElementById("addRoulette").classList.remove("hidden");
+  document.getElementById("buildBtn").classList.add("hidden");
 }
 function showSetup(){
   document.getElementById("setupCard").classList.remove("hidden");
   document.getElementById("rouletteGrid").classList.remove("solo");
+  document.getElementById("addRoulette").classList.add("hidden");
+  document.getElementById("buildBtn").classList.remove("hidden");
   renderRewardRows();
   renderPeople();
 }
@@ -451,7 +455,9 @@ let pickRow = -1;
 let pickFloor = "1";
 function renderPick(){
   const list = document.getElementById("pickList");
+  const done = document.getElementById("pickDone");
   if (pickMode === "boss") {
+    done.classList.add("hidden");
     document.getElementById("pickFloors").classList.remove("hidden");
     document.getElementById("pickFloors").innerHTML = FLOORS.map(f => '<button type="button" class="'+(f.id===pickFloor?"btn":"ghost")+'" data-pick-floor="'+f.id+'">'+f.label+"</button>").join("");
     document.querySelectorAll("[data-pick-floor]").forEach(el => el.onclick = () => { pickFloor = el.dataset.pickFloor; renderPick(); });
@@ -467,6 +473,17 @@ function renderPick(){
   }
   document.getElementById("pickFloors").classList.add("hidden");
   const groups = rewardGroups();
+  if (pickMode === "reward-add") {
+    done.classList.remove("hidden");
+    list.innerHTML = groups.length ? groups.map(([cat, names]) => '<div class="cat">'+esc(cat)+'</div>'+names.map(n => '<div class="row" style="margin:6px 0"><label class="inline" style="flex:1"><input type="checkbox" data-add-name="'+esc(n)+'">'+esc(n)+'</label><input data-add-qty type="number" min="1" value="1" disabled style="flex:0 0 64px;width:64px"></div>').join("")).join("") : "<p class='muted'>설정에서 보상을 추가하세요.</p>";
+    list.querySelectorAll("[data-add-name]").forEach(el => el.onchange = () => {
+      const qty = el.closest(".row").querySelector("[data-add-qty]");
+      qty.disabled = !el.checked;
+      if (el.checked && !(Number(qty.value) >= 1)) qty.value = 1;
+    });
+    return;
+  }
+  done.classList.add("hidden");
   list.innerHTML = groups.length ? groups.map(([cat, names]) => '<div class="cat">'+esc(cat)+'</div><div class="chips">'+names.map(n => '<button type="button" class="ghost" data-pick-reward="'+esc(n)+'">'+esc(n)+"</button>").join("")+"</div>").join("") : "<p class='muted'>설정에서 보상을 추가하세요.</p>";
   list.querySelectorAll("[data-pick-reward]").forEach(el => el.onclick = () => {
     if (rewardDraft[pickRow]) rewardDraft[pickRow].name = el.dataset.pickReward;
@@ -491,6 +508,18 @@ function openRewardPick(i){
 }
 document.getElementById("bossPick").onclick = openBossPick;
 document.getElementById("pickClose").onclick = () => document.getElementById("pickModal").classList.add("hidden");
+document.getElementById("pickDone").onclick = () => {
+  const adds = [];
+  document.querySelectorAll("#pickList [data-add-name]:checked").forEach(el => {
+    const n = Math.max(1, Math.floor(Number(el.closest(".row").querySelector("[data-add-qty]").value)||1));
+    for (let i = 0; i < n; i++) adds.push({name:el.dataset.addName, qty:1, even:false, recipients:[], mode:"all"});
+  });
+  if (!adds.length) return alert("보상을 체크하세요.");
+  rewardDraft = rewardDraft.filter(r => String(r.name||"").trim());
+  rewardDraft.push(...adds);
+  document.getElementById("pickModal").classList.add("hidden");
+  renderRewardRows();
+};
 function fillSelects(){
   setBoss(document.getElementById("boss").value);
   document.getElementById("title").textContent = state.guild || "우리 길드";
@@ -611,7 +640,6 @@ function renderRewardRows(){
   });
   box.querySelectorAll("[data-rd]").forEach(el => el.onclick = () => {
     rewardDraft.splice(Number(el.dataset.rd), 1);
-    if (!rewardDraft.length) rewardDraft.push({name:"", qty:1, even:false, recipients:[], mode:"all"});
     renderRewardRows();
   });
 }
@@ -656,8 +684,10 @@ document.getElementById("splitCancel").onclick = () => {
   renderRewardRows();
 };
 document.getElementById("addRewardRow").onclick = () => {
-  rewardDraft.push({name:"", qty:1, even:false, recipients:[], mode:"all"});
-  renderRewardRows();
+  pickMode = "reward-add";
+  document.getElementById("pickTitle").textContent = "보상";
+  renderPick();
+  document.getElementById("pickModal").classList.remove("hidden");
 };
 function syncRewardDraft(){
   document.querySelectorAll("[data-rq]").forEach(el => { if (rewardDraft[el.dataset.rq]) rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
@@ -963,7 +993,7 @@ document.getElementById("addAll").onclick = () => {
 document.getElementById("addRoulette").onclick = () => {
   if (!leadMode || spinning) return;
   people = [];
-  rewardDraft = [{name:"", qty:1, even:false, recipients:[], mode:"all"}];
+  rewardDraft = [];
   setBoss("");
   document.getElementById("caughtDate").value = today();
   document.getElementById("runDate").value = today();
