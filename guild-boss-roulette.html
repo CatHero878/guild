@@ -117,7 +117,6 @@
     <button type="button" data-view="roulette" id="tabRoulette">룰렛</button>
     <button type="button" data-view="history">기록</button>
     <button type="button" data-view="members">길드원</button>
-    <button type="button" data-view="dps">딜량</button>
     <button type="button" data-view="settings" id="tabSettings">설정</button>
   </nav>
   <section id="view-roulette">
@@ -156,14 +155,6 @@
   </section>
   <section id="view-history" class="card hidden"><input id="q" placeholder="검색" /><div id="history"></div></section>
   <section id="view-members" class="card hidden"><div id="memberView"></div></section>
-  <section id="view-dps" class="card hidden">
-    <label>층</label>
-    <div id="dpsFloors" class="actions"></div>
-    <label>보스</label>
-    <div id="dpsCats" class="actions"></div>
-    <div id="dpsInputs"></div>
-    <div class="actions"><button type="button" class="btn" id="saveDps">확인</button></div>
-  </section>
   <section id="view-settings" class="hidden">
     <div id="settingsBody" class="grid">
       <div class="card">
@@ -282,8 +273,7 @@ let ready = null;
 let rotation = 0;
 let spinning = false;
 let pushing = false;
-let dpsBossName = "";
-let dpsFloor = "1";
+let allowEmptyHistory = false;
 const params = new URLSearchParams(location.search);
 const leadMode = params.get("mode") === "lead";
 const queryDb = params.get("db") || "";
@@ -311,13 +301,16 @@ if (ensureOccupation() || ensureGroups()) save();
 if (queryDb) state.firebaseUrl = queryDb;
 if (queryRoom) state.room = queryRoom;
 function payload(){
-  return {
+  const history = Array.isArray(state.history) ? state.history : [];
+  const body = {
     guild:state.guild, members:state.members, bosses:state.bosses, rewards:state.rewards||[],
     leader:state.leader||"", vice:state.vice||"", vice2:state.vice2||"",
-    history:state.history, dps:state.dps, dpsByBoss:state.dpsByBoss||{}, bossFloors:state.bossFloors||{},
+    history, dps:state.dps||[], dpsByBoss:state.dpsByBoss||{}, bossFloors:state.bossFloors||{},
     groups:state.groups||[], groupItems:state.groupItems||{},
     schedule:state.schedule||null, schedules:state.schedules||[], firebaseUrl:state.firebaseUrl, room:state.room, rev:state.rev||1
   };
+  if (history.length || allowEmptyHistory) body.historyCount = history.length;
+  return body;
 }
 function save(){
   state.rev = (state.rev||1) + 1;
@@ -335,8 +328,22 @@ async function pushCloud(){
   const url = cloudUrl();
   if (!url || pushing) return;
   pushing = true;
-  try { await fetch(url, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload())}); }
-  catch (e) {}
+  try {
+    const body = payload();
+    if (!body.history.length && !allowEmptyHistory) {
+      const cur = await fetch(url);
+      const remote = cur.ok ? await cur.json() : null;
+      const remoteHistory = remote && Array.isArray(remote.history) ? remote.history : [];
+      if (remoteHistory.length) {
+        state.history = remoteHistory;
+        body.history = remoteHistory;
+        body.historyCount = remoteHistory.length;
+        localStorage.setItem(KEY, JSON.stringify(state));
+        renderHistory();
+      }
+    } else if (body.history.length) allowEmptyHistory = false;
+    await fetch(url, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  } catch (e) {}
   pushing = false;
 }
 async function pullCloud(){
@@ -347,21 +354,30 @@ async function pullCloud(){
     if (!res.ok) return;
     const remote = await res.json();
     if (!remote || !remote.members || (remote.rev||0) <= (state.rev||0)) return;
+    const localHistory = Array.isArray(state.history) ? state.history.slice() : [];
+    const remoteHistory = Array.isArray(remote.history) ? remote.history : null;
     Object.assign(state, remote);
+    let restoreHistory = false;
+    if (!remoteHistory) {
+      state.history = localHistory;
+      restoreHistory = localHistory.length > 0;
+    } else if (!remoteHistory.length && localHistory.length && remote.historyCount == null) {
+      state.history = localHistory;
+      restoreHistory = true;
+    } else state.history = remoteHistory;
     if (!state.rewards) state.rewards = [];
     if (!state.dpsByBoss) state.dpsByBoss = {};
     if (!state.bossFloors) state.bossFloors = {};
-    if (!state.history) state.history = [];
+    if (!Array.isArray(state.history)) state.history = [];
     if (!Array.isArray(state.schedules)) state.schedules = [];
     const madeGroups = ensureGroups();
-    if (ensureOccupation() || madeGroups) save();
+    if (restoreHistory || ensureOccupation() || madeGroups) save();
     else localStorage.setItem(KEY, JSON.stringify(state));
     adoptSchedule();
     fillSelects();
     renderPeople();
     renderHistory();
     renderMemberView();
-    renderDps();
     showSchedule();
     trySpin();
   } catch (e) {}
@@ -443,12 +459,11 @@ function showSetup(){
 }
 function show(view){
   document.querySelectorAll("#nav button").forEach(b => b.classList.toggle("active", b.dataset.view === view));
-  ["roulette","history","members","dps","settings"].forEach(id => {
+  ["roulette","history","members","settings"].forEach(id => {
     document.getElementById("view-"+id).classList.toggle("hidden", id !== view);
   });
   if (view === "history") renderHistory();
   if (view === "members") renderMemberView();
-  if (view === "dps") renderDps();
   if (view === "settings") renderSettings();
 }
 document.getElementById("nav").onclick = e => {
@@ -1293,7 +1308,8 @@ function renderHistory(){
     if (!leadMode || spinning) return;
     const id = el.dataset.delHist;
     askDelete("이 기록을 지울까요?", () => {
-      state.history = state.history.filter(h => h.id !== id);
+      state.history = (state.history||[]).filter(h => h.id !== id);
+      if (!state.history.length) allowEmptyHistory = true;
       save();
       renderHistory();
     });
@@ -1325,37 +1341,6 @@ function renderMemberView(){
     ? "<table><tr><td class=\"muted\">#</td><td class=\"muted\">이름</td><td class=\"muted\">직책</td></tr>"+state.members.map((m,i) => "<tr><td>"+(i+1)+"</td><td>"+esc(m)+"</td><td>"+esc(roleOf(m))+"</td></tr>").join("")+"</table>"
     : "<p class='muted'>설정에서 길드원을 추가하세요.</p>";
 }
-function savedDps(boss){
-  const map = state.dpsByBoss || {};
-  if (map[boss]) return map[boss];
-  const old = (state.dps||[]).find(d => d.boss === boss);
-  return old ? old.entries : [];
-}
-function renderDps(){
-  const floors = document.getElementById("dpsFloors");
-  floors.innerHTML = FLOORS.map(f => '<button type="button" class="'+(f.id===dpsFloor?"btn":"ghost")+'" data-dps-floor="'+f.id+'">'+f.label+"</button>").join("");
-  floors.querySelectorAll("[data-dps-floor]").forEach(el => el.onclick = () => { dpsFloor = el.dataset.dpsFloor; dpsBossName = ""; renderDps(); });
-  const bosses = state.bosses.filter(b => floorOf(b) === dpsFloor);
-  if (!bosses.includes(dpsBossName)) dpsBossName = bosses[0] || "";
-  document.getElementById("dpsCats").innerHTML = bosses.length
-    ? bosses.map(b => '<button type="button" class="'+(b===dpsBossName?"btn":"ghost")+'" data-dps-boss="'+esc(b)+'">'+esc(b)+"</button>").join("")
-    : "<p class='muted'>이 층에 보스가 없습니다.</p>";
-  document.querySelectorAll("[data-dps-boss]").forEach(el => el.onclick = () => { dpsBossName = el.dataset.dpsBoss; renderDps(); });
-  const saved = savedDps(dpsBossName);
-  const valueOf = name => { const row = saved.find(e => e.name === name); return row ? row.dps : ""; };
-  document.getElementById("dpsInputs").innerHTML = dpsBossName
-    ? state.members.map(m => '<div class="row" style="margin-top:8px"><span>'+esc(m)+'</span><input data-dps="'+esc(m)+'" type="number" min="0" placeholder="1분 딜량" value="'+valueOf(m)+'"></div>').join("")
-    : "";
-}
-document.getElementById("saveDps").onclick = () => {
-  if (!dpsBossName) return alert("보스를 선택하세요.");
-  const entries = [...document.querySelectorAll("[data-dps]")].map(el => ({name:el.dataset.dps, dps:Number(el.value)||0})).filter(e => e.dps > 0);
-  if (!entries.length) return alert("1분 딜량을 입력하세요.");
-  if (!state.dpsByBoss) state.dpsByBoss = {};
-  state.dpsByBoss[dpsBossName] = entries;
-  save();
-  alert("저장했습니다.");
-};
 function groupsOf(name){
   return (state.groups || []).filter(g => ((state.groupItems||{})[g] || []).includes(name));
 }
@@ -1378,7 +1363,6 @@ function renderSettings(){
     if (!state.bossFloors) state.bossFloors = {};
     state.bossFloors[name] = el.value;
     save();
-    renderDps();
   });
   document.querySelectorAll("[data-boss]").forEach(el => el.onclick = () => {
     const i = Number(el.dataset.boss);
