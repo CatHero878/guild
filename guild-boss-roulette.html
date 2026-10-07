@@ -709,20 +709,15 @@ function adoptSchedule(){
   state.schedules = state.schedules.filter(s => s && !s.done && s.id && !recorded(s.id));
   state.schedule = null;
 }
-function splitByScore(qty, list){
+function rollShare(qty, list){
   const q = Math.floor(Number(qty)||0);
-  const rows = list.filter(p => p && p.name && Number(p.score) > 0);
-  const total = rows.reduce((s,p) => s + Number(p.score), 0);
-  if (!rows.length || q <= 0 || total <= 0) return [];
-  const out = rows.map(p => {
-    const exact = Number(p.score) / total * q;
-    const base = Math.floor(exact);
-    return {name:p.name, qty:base, frac:exact - base, tie:Math.random()};
-  });
-  let rem = q - out.reduce((s,r) => s + r.qty, 0);
-  out.sort((a,b) => b.frac - a.frac || a.tie - b.tie);
-  for (let i = 0; i < rem; i++) out[i].qty += 1;
-  return out.filter(r => r.qty > 0).map(r => ({name:r.name, qty:r.qty})).sort((a,b) => b.qty - a.qty);
+  const tally = {};
+  for (let i = 0; i < q; i++) {
+    const won = pick(list);
+    if (!won) break;
+    tally[won.name] = (tally[won.name]||0) + 1;
+  }
+  return Object.keys(tally).map(name => ({name, qty:tally[name]})).sort((a,b) => b.qty - a.qty);
 }
 function shareParts(r){
   if (r.split && r.split.length) return r.split;
@@ -739,7 +734,7 @@ function spinQueue(item){
     if (r.mode === "share") {
       const parts = shareParts(r);
       if (parts.length) {
-        parts.forEach(s => queue.push({reward:r.name+" "+s.qty+"개", qty:s.qty, winner:s.name, score:0}));
+        queue.push({reward:r.name+" 분배", qty:r.qty, winner:parts[0].name, score:0});
         return;
       }
     }
@@ -926,7 +921,7 @@ function build(){
       r.split = splitEven(r.qty, r.recipients);
       r.winner = "";
     } else if (r.mode === "share") {
-      r.split = splitByScore(r.qty, list);
+      r.split = rollShare(r.qty, list);
       r.winner = "";
       r.recipients = [];
     } else {
