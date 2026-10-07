@@ -15,7 +15,10 @@
   .wrap { max-width:980px; margin:0 auto; padding:22px 16px 48px; position:relative; z-index:2; }
   header { display:flex; align-items:center; justify-content:center; gap:10px; text-align:left;
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
-  header img { width:86px; height:86px; object-fit:contain; border:0; background:transparent; flex:0 0 auto; filter:drop-shadow(2px 3px 0 #2b1a0e); }
+  header img { width:86px; height:86px; object-fit:contain; border:0; background:transparent; flex:0 0 auto; filter:drop-shadow(2px 3px 0 #2b1a0e); cursor:pointer; touch-action:none; user-select:none; -webkit-user-select:none; }
+  header img.glare { animation:glare .22s ease-in-out infinite; }
+  @keyframes glare { 0%,100% { transform:scale(1.12,.9) rotate(-6deg); } 50% { transform:scale(1.18,.82) rotate(7deg) translateY(3px); } }
+  .spit { position:fixed; z-index:40; width:22px; height:14px; margin:-7px 0 0 -11px; border-radius:50% 40% 50% 45%; background:radial-gradient(circle at 30% 30%, #f3ffc4, #b6d45a 55%, #7ea332); box-shadow:0 1px 0 rgba(70,90,20,.25); pointer-events:none; }
   h1 { margin:0; font-size:32px; font-weight:800; letter-spacing:-.03em; }
   header .sub { margin:2px 0 0; color:#f0d7a2; font-size:13px; font-weight:600; }
   nav { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; border:0; margin:14px 0 8px; }
@@ -97,7 +100,7 @@
 <canvas id="fx"></canvas>
 <div class="wrap">
   <header>
-    <img src="guild-cat-head.png" alt="" />
+    <img id="guildCat" src="guild-cat-head.png" alt="" draggable="false" />
     <div>
       <h1 id="title">우리 길드</h1>
     </div>
@@ -1545,6 +1548,48 @@ showSchedule();
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(pullCloud, 4000);
+(function(){
+  const cat = document.getElementById("guildCat");
+  if (!cat) return;
+  let holding = false;
+  let timer = 0;
+  const stains = [];
+  function lob(){
+    const r = cat.getBoundingClientRect();
+    const x = r.left + r.width * 0.58;
+    const y = r.top + r.height * 0.7;
+    const tx = 24 + Math.random() * (innerWidth - 48);
+    const ty = 80 + Math.random() * (innerHeight - 120);
+    const el = document.createElement("div");
+    el.className = "spit";
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    document.body.appendChild(el);
+    stains.push(el);
+    if (stains.length > 48) stains.shift().remove();
+    el.animate([
+      { transform:"translate(0,0) scale(.35) rotate(0deg)" },
+      { transform:"translate("+(tx-x)+"px,"+(ty-y)+"px) scale(1) rotate("+(Math.random()*80-40)+"deg)" }
+    ], { duration:420, easing:"cubic-bezier(.15,.7,.2,1)", fill:"forwards" });
+  }
+  function down(e){
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    holding = true;
+    cat.classList.add("glare");
+    lob();
+    clearInterval(timer);
+    timer = setInterval(() => { if (holding) lob(); }, 160);
+  }
+  function up(){
+    holding = false;
+    clearInterval(timer);
+    setTimeout(() => { if (!holding) cat.classList.remove("glare"); }, 180);
+  }
+  cat.addEventListener("pointerdown", down);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+})();
 </script>
 </body>
 </html>
