@@ -1031,28 +1031,33 @@ document.getElementById("closeModal").onclick = () => {
 function rewardNames(item){
   return normalizeRewards(item).map(r => r.name).filter(Boolean).join(", ");
 }
+function resultPeople(r){
+  if (r.split && r.split.length) return r.split.map(s => s.name+" "+s.qty);
+  if (r.winner) return [r.winner+" "+(r.qty||1)];
+  return [];
+}
 function resultText(item){
-  const lines = [(state.guild||"길드")+" 룰렛 결과", "날짜: "+(item.date||String(fmt(item.startAt)).slice(0,10)), "보스: "+(item.boss||"")];
+  const date = item.date || String(fmt(item.startAt)).slice(0,10);
+  const lines = ["🎰룰렛결과🎰", "📅 : "+date, "👾 : "+(item.boss||"")];
   normalizeRewards(item).forEach(r => {
-    if (r.even && r.split && r.split.length) lines.push(r.name+" x"+r.qty+" 균등 "+r.split.map(s => s.name+" "+s.qty).join(", "));
-    else if (r.mode === "share" && r.split && r.split.length) lines.push(r.name+" x"+r.qty+" 분배 "+r.split.map(s => s.name+" "+s.qty).join(", "));
-    else lines.push(r.name+" x"+(r.qty||1)+(r.winner ? " "+r.winner : ""));
+    lines.push("", "["+r.name+"x"+(r.qty||1)+"] :");
+    resultPeople(r).forEach(line => lines.push(line));
   });
-  return lines.filter(Boolean).join("\n");
+  return lines.join("\n");
 }
 async function shareKakao(item){
   if (!item) return;
   const text = resultText(item);
+  const ua = navigator.userAgent || "";
+  if (/android/i.test(ua)) {
+    location.href = "intent://send/#Intent;action=android.intent.action.SEND;type=text/plain;package=com.kakao.talk;S.android.intent.extra.TEXT="+encodeURIComponent(text)+";end";
+    return;
+  }
   if (navigator.share) {
-    try { await navigator.share({ title:(state.guild||"길드")+" 룰렛 결과", text }); return; }
+    try { await navigator.share({ title:"룰렛결과", text }); return; }
     catch (e) { if (e && e.name === "AbortError") return; }
   }
-  try {
-    await navigator.clipboard.writeText(text);
-    alert("결과를 복사했습니다. 카카오톡 대화창에 붙여넣기 하세요.");
-  } catch (e) {
-    prompt("카카오톡에 붙여넣기 하세요.", text);
-  }
+  alert("이 화면에서는 카카오톡 앱을 바로 열 수 없습니다. 휴대폰에서 공유해 주세요.");
 }
 let currentResult = null;
 function openResult(row){
