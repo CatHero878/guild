@@ -31,7 +31,7 @@
   .row > * { flex:1; }
   .line { display:grid; grid-template-columns:1fr 88px auto; gap:8px; margin-bottom:8px; }
   .reward-line { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px; }
-  .reward-line .pickbtn { flex:1 1 140px; width:auto; text-align:left; }
+  .reward-line .reward-name { flex:1 1 140px; font-weight:800; }
   #bossPick { width:100%; text-align:left; }
   .cat { margin:14px 0 6px; font-size:13px; color:#a15a24; font-weight:800; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -205,7 +205,7 @@
     <div id="pickTitle">선택</div>
     <div id="pickFloors" class="actions"></div>
     <div id="pickList"></div>
-    <div class="actions"><button type="button" class="btn hidden" id="pickDone">완료</button><button type="button" class="ghost" id="pickClose">닫기</button></div>
+    <div class="actions"><button type="button" class="btn hidden" id="pickDone">확인</button><button type="button" class="ghost" id="pickClose">닫기</button></div>
   </div>
 </div>
 <div id="wheelStage" class="hidden">
@@ -619,10 +619,8 @@ function renderRewardRows(){
     const on = q >= 2 && !r.even;
     const share = r.mode === "share" && on;
     const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
-    const label = r.name || "보상 선택";
-    return '<div class="reward-line"><button type="button" class="ghost pickbtn" data-rp="'+i+'">'+esc(label)+'</button><input data-rq="'+i+'" type="number" min="1" enterkeyhint="next" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
+    return '<div class="reward-line"><span class="reward-name">'+esc(r.name)+'</span><input data-rq="'+i+'" type="number" min="1" enterkeyhint="next" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type="button" class="danger" data-rd="'+i+'">삭제</button></div>'+note;
   }).join("");
-  box.querySelectorAll("[data-rp]").forEach(el => el.onclick = () => openRewardPick(Number(el.dataset.rp)));
   box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => {
     const i = Number(el.dataset.rq);
     rewardDraft[i].qty = Number(el.value)||0;
