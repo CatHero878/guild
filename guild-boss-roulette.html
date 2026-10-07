@@ -17,7 +17,7 @@
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
   .cat-hit { position:relative; width:86px; height:80px; flex:0 0 auto; touch-action:none; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; user-select:none; }
   .cat-hit img, .cat-hit canvas { width:86px; height:80px; object-fit:fill; border:0; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); pointer-events:none; -webkit-user-drag:none; display:block; }
-  .cat-hit canvas { position:absolute; inset:0; }
+  .cat-hit video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); }
   body.rained .wrap { filter: blur(4px); transition: filter .4s linear; }
   body.restored .wrap { filter: blur(0); transition: filter .8s ease; }
   #spitLayer { position:fixed; inset:0; z-index:60; pointer-events:none; overflow:hidden; }
@@ -107,6 +107,7 @@
     <div id="catHit" class="cat-hit">
       <img id="guildCat" src="guild-cat-head.png" alt="" draggable="false" />
       <canvas id="catEyes" width="280" height="260"></canvas>
+      <video id="catGather" class="hidden" playsinline muted preload="auto" src="cat-gather.webm"></video>
     </div>
     <div>
       <h1 id="title">우리 길드</h1>
@@ -1663,7 +1664,7 @@ setInterval(pullCloud, 4000);
     paint(side);
     timer = setTimeout(() => paint(0), 520);
   }
-  function spitScreen(){
+  function spitScreen(fromGather){
     busy = true;
     const layer = document.createElement("div");
     layer.id = "spitLayer";
@@ -1708,7 +1709,7 @@ setInterval(pullCloud, 4000);
         layer.remove();
         document.body.classList.remove("rained","restored");
         paint(0);
-        busy = false;
+        if (!fromGather) busy = false;
       }, 2800);
     };
   }
@@ -1719,15 +1720,30 @@ setInterval(pullCloud, 4000);
     if (busy) return;
     busy = true;
     clearTimeout(timer);
-    let step = 0;
-    const beat = setInterval(() => {
-      paintGather(step % 2 ? -1 : 1, false);
-      step++;
-      if (step < 6) return;
-      clearInterval(beat);
-      paintGather(0, true);
-      setTimeout(spitScreen, 90);
-    }, 120);
+    paint(0);
+    const vid = document.getElementById("catGather");
+    if (!vid) { spitScreen(false); return; }
+    let fired = false;
+    const launch = () => { if (!fired) { fired = true; spitScreen(true); } };
+    const done = () => {
+      vid.onended = null;
+      vid.ontimeupdate = null;
+      vid.pause();
+      vid.classList.add("hidden");
+      canvas.style.visibility = "";
+      base.style.visibility = "";
+      paint(0);
+      busy = false;
+    };
+    canvas.style.visibility = "hidden";
+    base.style.visibility = "hidden";
+    vid.classList.remove("hidden");
+    vid.onended = done;
+    vid.ontimeupdate = () => { if (vid.duration && vid.currentTime > vid.duration * 0.58) launch(); };
+    try { vid.currentTime = 0; } catch (e) {}
+    vid.playbackRate = 2.2;
+    const play = vid.play();
+    if (play && play.catch) play.catch(done);
   }
   hit.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
