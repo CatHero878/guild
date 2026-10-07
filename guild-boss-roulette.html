@@ -37,6 +37,8 @@
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   #pickList { max-height:52vh; overflow:auto; }
   .reward-line input[type=number] { flex:0 0 76px; width:76px; }
+  .modebtn { flex:0 0 auto; width:auto; padding:8px 10px; }
+  .modebtn:disabled { opacity:.45; }
   label.inline { display:flex; align-items:center; gap:6px; margin:0; color:var(--ink); font-size:13px; width:auto; }
   label.inline input { width:auto; }
   .btn,.ghost,.danger { border:3px solid #2b1a0e; border-radius:10px; padding:10px 14px; font-weight:800; box-shadow:0 4px 0 #2b1a0e; }
@@ -223,7 +225,7 @@ const FLOORS = [
 ];
 const state = load();
 let people = [];
-let rewardDraft = [{name:"", qty:1, even:false, recipients:[]}];
+let rewardDraft = [{name:"", qty:1, even:false, recipients:[], mode:"all"}];
 let splitIndex = -1;
 let splitNames = [];
 let ready = null;
@@ -563,6 +565,10 @@ function rewardLines(item, detailed){
       return esc(r.name)+" x"+r.qty+" · 균등 "+r.split.map(s => esc(s.name)+" "+s.qty).join(", ");
     }
     if (r.even) return esc(r.name)+" x"+r.qty+" · 균등분배";
+    if (r.mode === "share") {
+      if (detailed && r.split && r.split.length) return esc(r.name)+" x"+r.qty+" · 분배 "+r.split.map(s => esc(s.name)+" "+s.qty).join(", ");
+      return esc(r.name)+" x"+r.qty+" · 분배";
+    }
     const who = r.winner || (solo ? (item.winner||"") : "");
     return esc(r.name)+" x"+r.qty+(who ? " · "+esc(who) : "");
   }).join("<br>");
@@ -570,12 +576,34 @@ function rewardLines(item, detailed){
 function renderRewardRows(){
   const box = document.getElementById("rewardRows");
   box.innerHTML = rewardDraft.map((r,i) => {
+    const q = Math.floor(Number(r.qty)||0);
+    const on = q >= 2 && !r.even;
+    const share = r.mode === "share" && on;
     const note = r.even && r.recipients && r.recipients.length ? '<div class="muted">균등 '+r.recipients.length+"명</div>" : "";
     const label = r.name || "보상 선택";
-    return '<div class="reward-line"><button type="button" class="ghost pickbtn" data-rp="'+i+'">'+esc(label)+'</button><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
+    return '<div class="reward-line"><button type="button" class="ghost pickbtn" data-rp="'+i+'">'+esc(label)+'</button><input data-rq="'+i+'" type="number" min="1" value="'+(r.qty||1)+'"><button type="button" class="modebtn '+(share?"btn":"ghost")+'" data-rm="share" data-ri="'+i+'"'+(on?"":" disabled")+'>분배</button><button type="button" class="modebtn '+(on && !share?"btn":"ghost")+'" data-rm="all" data-ri="'+i+'"'+(on?"":" disabled")+'>몰빵</button><label class="inline"><input data-re="'+i+'" type="checkbox"'+(r.even?" checked":"")+">균등분배</label><button type='button' class='danger' data-rd='"+i+"'>삭제</button></div>"+note;
   }).join("");
   box.querySelectorAll("[data-rp]").forEach(el => el.onclick = () => openRewardPick(Number(el.dataset.rp)));
-  box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => { rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
+  box.querySelectorAll("[data-rq]").forEach(el => el.oninput = () => {
+    const i = Number(el.dataset.rq);
+    rewardDraft[i].qty = Number(el.value)||0;
+    if (Math.floor(rewardDraft[i].qty) < 2) rewardDraft[i].mode = "all";
+    const line = el.parentElement;
+    const on = Math.floor(rewardDraft[i].qty) >= 2 && !rewardDraft[i].even;
+    const share = rewardDraft[i].mode === "share" && on;
+    line.querySelectorAll("[data-rm]").forEach(b => {
+      b.disabled = !on;
+      const picked = (b.dataset.rm === "share" && share) || (b.dataset.rm === "all" && on && !share);
+      b.className = "modebtn " + (picked ? "btn" : "ghost");
+    });
+  });
+  box.querySelectorAll("[data-rm]").forEach(el => el.onclick = () => {
+    const i = Number(el.dataset.ri);
+    if (Math.floor(Number(rewardDraft[i].qty)||0) < 2) return;
+    rewardDraft[i].mode = el.dataset.rm === "share" ? "share" : "all";
+    if (rewardDraft[i].mode === "share") { rewardDraft[i].even = false; rewardDraft[i].recipients = []; }
+    renderRewardRows();
+  });
   box.querySelectorAll("[data-re]").forEach(el => el.onchange = () => {
     const i = Number(el.dataset.re);
     if (el.checked) openSplit(i);
@@ -583,7 +611,7 @@ function renderRewardRows(){
   });
   box.querySelectorAll("[data-rd]").forEach(el => el.onclick = () => {
     rewardDraft.splice(Number(el.dataset.rd), 1);
-    if (!rewardDraft.length) rewardDraft.push({name:"", qty:1, even:false, recipients:[]});
+    if (!rewardDraft.length) rewardDraft.push({name:"", qty:1, even:false, recipients:[], mode:"all"});
     renderRewardRows();
   });
 }
@@ -628,7 +656,7 @@ document.getElementById("splitCancel").onclick = () => {
   renderRewardRows();
 };
 document.getElementById("addRewardRow").onclick = () => {
-  rewardDraft.push({name:"", qty:1, even:false, recipients:[]});
+  rewardDraft.push({name:"", qty:1, even:false, recipients:[], mode:"all"});
   renderRewardRows();
 };
 function syncRewardDraft(){
@@ -683,8 +711,16 @@ function adoptSchedule(){
 }
 function spinQueue(item){
   const list = normalizeRewards(item);
-  const own = list.filter(r => !r.even && r.winner);
-  if (own.length) return own.map(r => ({reward:r.name, qty:r.qty, winner:r.winner, score:r.score||0}));
+  const queue = [];
+  list.forEach(r => {
+    if (r.even) return;
+    if (r.mode === "share" && Array.isArray(r.draws) && r.draws.length) {
+      r.draws.forEach((name, i) => queue.push({reward:r.name+" "+(i+1)+"/"+r.draws.length, qty:1, winner:name, score:0}));
+      return;
+    }
+    if (r.winner) queue.push({reward:r.name, qty:r.qty, winner:r.winner, score:r.score||0});
+  });
+  if (queue.length) return queue;
   const allEven = list.length && list.every(r => r.even);
   if (allEven || !item || !item.winner || item.winner === "균등분배") return [];
   return [{reward:(list[0] && list[0].name) || "", winner:item.winner, score:item.score||0}];
@@ -746,7 +782,9 @@ function showWinner(s, replay){
   const rewards = normalizeRewards(s);
   const spins = spinQueue(s).filter(r => r.reward || rewards.length <= 1);
   document.getElementById("winKicker").textContent = replay ? "다시보기" : "당첨";
-  if (rewards.length <= 1 && spins.length === 1 && !rewards.some(r => r.even)) {
+  if (rewards.length === 1 && rewards[0].mode === "share") {
+    document.getElementById("winName").textContent = "분배";
+  } else if (rewards.length <= 1 && spins.length === 1 && !rewards.some(r => r.even)) {
     document.getElementById("winName").textContent = spins[0].winner;
   } else if (!spins.length) {
     document.getElementById("winName").textContent = "균등 분배";
@@ -823,7 +861,7 @@ function startReplay(row){
 function prefill(s){
   people = (s.entries||[]).map(e => ({name:e.name, score:e.score}));
   const list = normalizeRewards(s);
-  rewardDraft = list.length ? list.map(r => ({name:r.name, qty:r.qty||1, even:!!r.even, recipients:(r.recipients||[]).slice()})) : [{name:"", qty:1, even:false, recipients:[]}];
+  rewardDraft = list.length ? list.map(r => ({name:r.name, qty:r.qty||1, even:!!r.even, mode:r.mode==="share"?"share":"all", recipients:(r.recipients||[]).slice()})) : [{name:"", qty:1, even:false, recipients:[], mode:"all"}];
   document.getElementById("boss").value = s.boss || "";
   setBoss(s.boss || "");
   document.getElementById("caughtDate").value = s.date || today();
@@ -853,6 +891,7 @@ function build(){
     name:String(r.name||"").trim(),
     qty:Math.floor(Number(r.qty)||0),
     even:!!r.even,
+    mode:(Math.floor(Number(r.qty)||0) >= 2 && r.mode === "share" && !r.even) ? "share" : "all",
     recipients:(r.recipients||[]).filter(n => namesIn.has(n))
   })).filter(r => r.name && r.qty > 0);
   if (!rewards.length) return alert("보상을 고르고 수량을 입력하세요.");
@@ -861,6 +900,14 @@ function build(){
       if (!r.recipients.length) return alert(r.name+" 균등 분배 인원을 체크하세요.");
       r.split = splitEven(r.qty, r.recipients);
       r.winner = "";
+    } else if (r.mode === "share") {
+      r.draws = [];
+      for (let i = 0; i < r.qty; i++) r.draws.push(pick(list).name);
+      const tally = {};
+      r.draws.forEach(n => { tally[n] = (tally[n]||0) + 1; });
+      r.split = Object.keys(tally).map(name => ({name, qty:tally[name]})).sort((a,b) => b.qty - a.qty);
+      r.winner = "";
+      r.recipients = [];
     } else {
       const won = pick(list);
       r.winner = won.name;
@@ -870,8 +917,10 @@ function build(){
     }
   }
   const total = list.reduce((s,p) => s+p.score, 0);
-  const spins = rewards.filter(r => !r.even && r.winner);
-  const winner = spins.length === 1 ? spins[0].winner : (spins.length ? spins.map(r => r.name+" "+r.winner).join(" · ") : "균등분배");
+  const spins = rewards.filter(r => !r.even && (r.winner || r.mode === "share"));
+  const winner = spins.length === 1 && spins[0].mode !== "share"
+    ? spins[0].winner
+    : (spins.length ? spins.map(r => r.name+" "+(r.mode==="share" ? (r.split||[]).map(s => s.name+" "+s.qty).join("/") : r.winner)).join(" · ") : "균등분배");
   if (!Array.isArray(state.schedules)) state.schedules = [];
   state.schedules.push({
     id:uid(), date:caught, startAt:when, boss:document.getElementById("boss").value,
@@ -898,7 +947,7 @@ document.getElementById("addAll").onclick = () => {
 document.getElementById("addRoulette").onclick = () => {
   if (!leadMode || spinning) return;
   people = [];
-  rewardDraft = [{name:"", qty:1, even:false, recipients:[]}];
+  rewardDraft = [{name:"", qty:1, even:false, recipients:[], mode:"all"}];
   setBoss("");
   document.getElementById("caughtDate").value = today();
   document.getElementById("runDate").value = today();
