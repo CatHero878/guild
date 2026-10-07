@@ -64,6 +64,7 @@
   table { width:100%; border-collapse:collapse; }
   td { padding:10px 4px; border-bottom:2px solid #e7cba6; }
   .item { padding:12px 0; border-bottom:2px solid #e7cba6; }
+  button.hist { display:block; width:100%; text-align:left; background:transparent; border:0; border-bottom:2px solid #e7cba6; box-shadow:none; border-radius:0; padding:12px 4px; font-weight:800; color:var(--ink); }
   #fx { position:fixed; inset:0; pointer-events:none; z-index:20; }
   .modal-back { position:fixed; inset:0; background:rgba(30,20,10,.45); display:grid; place-items:center; z-index:30; }
   .modal { width:min(460px,92vw); background:#fff4d8; border:5px solid #2b1a0e; border-radius:16px; padding:22px; text-align:center; box-shadow:0 8px 0 #2b1a0e; }
@@ -184,8 +185,20 @@
     </div>
   </section>
 </div>
+<div id="resultModal" class="modal-back hidden">
+  <div class="modal">
+    <div class="muted" id="resultWhen"></div>
+    <h2 id="resultBoss" style="font-size:26px"></h2>
+    <div id="resultBody"></div>
+    <div class="actions" style="justify-content:center">
+      <button type="button" class="btn" id="resultShare">카카오톡 공유</button>
+      <button type="button" class="btn" id="resultReplay">룰렛 돌리기</button>
+      <button type="button" class="ghost" id="resultClose">닫기</button>
+    </div>
+  </div>
+</div>
 <div id="modal" class="modal-back hidden">
-  <div class="modal"><div class="muted" id="winKicker">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="closeModal">확인</button></div></div>
+  <div class="modal"><div class="muted" id="winKicker">당첨</div><h2 id="winName"></h2><div id="winDetail"></div><div class="actions" style="justify-content:center"><button type="button" class="btn" id="shareResult">카카오톡 공유</button><button type="button" class="btn" id="closeModal">확인</button></div></div>
 </div>
 <div id="pickModal" class="modal-back hidden">
   <div class="modal" style="text-align:left">
@@ -842,6 +855,7 @@ function showWinner(s, replay){
     document.getElementById("winName").textContent = "보상별 당첨";
   }
   document.getElementById("winDetail").innerHTML = esc(s.boss)+"<br>"+rewardLines(s, true);
+  currentResult = s;
   document.getElementById("modal").classList.remove("hidden");
 }
 function finishSchedule(){
@@ -1014,6 +1028,40 @@ document.getElementById("closeModal").onclick = () => {
   if (!spinning) showSchedule();
   trySpin();
 };
+function rewardNames(item){
+  return normalizeRewards(item).map(r => r.name).filter(Boolean).join(", ");
+}
+function resultText(item){
+  const lines = [(state.guild||"길드")+" 룰렛 결과", "날짜: "+(item.date||String(fmt(item.startAt)).slice(0,10)), "보스: "+(item.boss||"")];
+  normalizeRewards(item).forEach(r => {
+    if (r.even && r.split && r.split.length) lines.push(r.name+" x"+r.qty+" 균등 "+r.split.map(s => s.name+" "+s.qty).join(", "));
+    else if (r.mode === "share" && r.split && r.split.length) lines.push(r.name+" x"+r.qty+" 분배 "+r.split.map(s => s.name+" "+s.qty).join(", "));
+    else lines.push(r.name+" x"+(r.qty||1)+(r.winner ? " "+r.winner : ""));
+  });
+  return lines.filter(Boolean).join("\n");
+}
+async function shareKakao(item){
+  if (!item) return;
+  const text = resultText(item);
+  if (navigator.share) {
+    try { await navigator.share({ title:(state.guild||"길드")+" 룰렛 결과", text }); return; }
+    catch (e) { if (e && e.name === "AbortError") return; }
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("결과를 복사했습니다. 카카오톡 대화창에 붙여넣기 하세요.");
+  } catch (e) {
+    prompt("카카오톡에 붙여넣기 하세요.", text);
+  }
+}
+let currentResult = null;
+function openResult(row){
+  currentResult = row;
+  document.getElementById("resultWhen").textContent = row.date || String(fmt(row.startAt)).slice(0,10);
+  document.getElementById("resultBoss").textContent = row.boss || "";
+  document.getElementById("resultBody").innerHTML = rewardLines(row, true);
+  document.getElementById("resultModal").classList.remove("hidden");
+}
 function renderHistory(){
   const q = document.getElementById("q").value.trim().toLowerCase();
   const rows = state.history.filter(h => h && !h.pending && h.winner).filter(h => {
@@ -1021,15 +1069,23 @@ function renderHistory(){
     return blob.toLowerCase().includes(q);
   });
   document.getElementById("history").innerHTML = rows.length ? rows.map(h => {
-    const parts = (h.entries||[]).map(p => esc(p.name)+" "+p.score).join(" · ");
-    return '<article class="item"><strong>'+rewardLines(h, true)+"</strong><br>잡은 날 "+esc(h.date||"")+" · 실행 "+fmt(h.startAt)+"<br>"+esc(h.boss)+'<br><span class="muted">'+parts+'</span><div class="actions"><button type="button" class="btn" data-replay="'+h.id+'">룰렛 돌리기</button></div></article>';
+    const when = h.date || String(fmt(h.startAt)).slice(0,10);
+    return '<button type="button" class="hist" data-hist="'+h.id+'">'+esc(when)+" · "+esc(h.boss||"")+"<br>"+esc(rewardNames(h))+"</button>";
   }).join("") : "";
-  document.querySelectorAll("[data-replay]").forEach(el => el.onclick = () => {
-    const row = state.history.find(h => h.id === el.dataset.replay);
-    if (row) startReplay(row);
+  document.querySelectorAll("[data-hist]").forEach(el => el.onclick = () => {
+    const row = state.history.find(h => h.id === el.dataset.hist);
+    if (row) openResult(row);
   });
 }
 document.getElementById("q").oninput = renderHistory;
+document.getElementById("shareResult").onclick = () => shareKakao(currentResult);
+document.getElementById("resultShare").onclick = () => shareKakao(currentResult);
+document.getElementById("resultClose").onclick = () => document.getElementById("resultModal").classList.add("hidden");
+document.getElementById("resultReplay").onclick = () => {
+  const row = currentResult;
+  document.getElementById("resultModal").classList.add("hidden");
+  if (row) startReplay(row);
+};
 function roleOf(name){
   const roles = [];
   if (name && name === state.leader) roles.push("길마");
