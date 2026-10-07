@@ -16,8 +16,8 @@
   header { display:flex; align-items:center; justify-content:center; gap:10px; text-align:left;
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
   .cat-hit { position:relative; width:86px; height:80px; flex:0 0 auto; touch-action:none; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; user-select:none; }
-  .cat-hit img, .cat-hit canvas { width:86px; height:80px; object-fit:fill; border:0; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); pointer-events:none; -webkit-user-drag:none; display:block; }
-  .cat-hit video { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); }
+  .cat-hit img, .cat-hit canvas { width:86px; height:80px; object-fit:fill; border:0; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); pointer-events:none; -webkit-user-drag:none; }
+  .cat-hit canvas, .cat-hit video { position:absolute; left:0; top:0; width:100%; height:100%; object-fit:contain; pointer-events:none; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); }
   body.rained .wrap { filter: blur(4px); transition: filter .4s linear; }
   body.restored .wrap { filter: blur(0); transition: filter .8s ease; }
   #spitLayer { position:fixed; inset:0; z-index:60; pointer-events:none; overflow:hidden; }
@@ -1655,8 +1655,9 @@ setInterval(pullCloud, 4000);
     ctx.fill();
   }
   function mouthPoint(){
-    const r = hit.getBoundingClientRect();
-    return { x: r.left + (140/280)*r.width, y: r.top + (210/260)*r.height };
+    const vid = document.getElementById("catGather");
+    const r = (vid && !vid.classList.contains("hidden") ? vid : hit).getBoundingClientRect();
+    return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.72 };
   }
   function glance(){
     clearTimeout(timer);
@@ -1682,10 +1683,10 @@ setInterval(pullCloud, 4000);
     glob.style.left = (sx - 46) + "px";
     glob.style.top = (sy - 24) + "px";
     glob.animate([
-      { transform:"translate(0,0) scale(.18) rotate(-8deg)", opacity:1 },
-      { transform:"translate("+(cx-sx)+"px,"+((cy-sy)*0.35)+"px) scale(.7) rotate(10deg)", opacity:1, offset:.35 },
-      { transform:"translate("+(cx-sx)+"px,"+(cy-sy)+"px) scale(1.15) rotate(18deg)", opacity:1 }
-    ], { duration:380, easing:"cubic-bezier(.15,.7,.2,1)", fill:"forwards" }).onfinish = () => {
+      { transform:"translate(0,0) scale(.04) rotate(0deg)", opacity:1 },
+      { transform:"translate("+((cx-sx)*0.03)+"px,"+((cy-sy)*0.04)+"px) scale(.2) rotate(6deg)", opacity:1, offset:.2 },
+      { transform:"translate("+(cx-sx)+"px,"+(cy-sy)+"px) scale(1.15) rotate(16deg)", opacity:1 }
+    ], { duration:460, easing:"cubic-bezier(.2,.7,.2,1)", fill:"forwards" }).onfinish = () => {
       glob.remove();
       const sheet = document.createElement("img");
       sheet.src = "spit-sheet.png";
@@ -1739,11 +1740,17 @@ setInterval(pullCloud, 4000);
     base.style.visibility = "hidden";
     vid.classList.remove("hidden");
     vid.onended = done;
-    vid.ontimeupdate = () => { if (vid.duration && vid.currentTime > vid.duration * 0.58) launch(); };
+    const watch = () => {
+      if (fired || !vid.duration) return;
+      if (vid.currentTime >= vid.duration * 0.88) launch();
+      else if (!vid.ended && !vid.classList.contains("hidden")) requestAnimationFrame(watch);
+    };
     try { vid.currentTime = 0; } catch (e) {}
-    vid.playbackRate = 2.2;
+    vid.playbackRate = 1.45;
     const play = vid.play();
     if (play && play.catch) play.catch(done);
+    else requestAnimationFrame(watch);
+    if (play && play.then) play.then(() => requestAnimationFrame(watch));
   }
   hit.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
