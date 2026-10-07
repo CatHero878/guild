@@ -64,7 +64,10 @@
   .pointer { position:absolute; top:4px; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-top:16px solid #2b1a0e; }
   .hist-box { position:relative; border-bottom:2px solid #e7cba6; }
   button.hist { display:block; width:100%; text-align:left; background:transparent; border:0; box-shadow:none; border-radius:0; padding:12px 36px 12px 4px; font-weight:800; color:var(--ink); }
-  .hist-x { position:absolute; top:8px; right:0; width:28px; height:28px; padding:0; border-radius:8px; }
+  .floor-tab { background:#efe2c4; color:#3a2414; border:2px solid #8a6a3b; border-radius:99px; padding:6px 10px; font-weight:800; box-shadow:none; font-size:13px; }
+  .floor-tab.on { background:#2b1a0e; color:#ffe7a3; }
+  .boss-pick { display:block; width:100%; text-align:left; background:#fff; border:0; border-bottom:2px solid #e7cba6; border-radius:0; box-shadow:none; padding:12px 8px; font-weight:800; color:var(--ink); }
+  #askModal { z-index:40; }
   .muted { color:var(--muted); }
   .bar { height:8px; background:#f0d7a2; border-radius:99px; overflow:hidden; border:2px solid #2b1a0e; }
   .bar span { display:block; height:100%; background:#e07a3d; }
@@ -217,6 +220,15 @@
   <div class="card">
     <div id="spinInfo" style="text-align:center;font-weight:800"></div>
     <div id="wheelGrid" class="wheel-grid"></div>
+  </div>
+</div>
+<div id="askModal" class="modal-back hidden">
+  <div class="modal">
+    <p id="askText" style="font-weight:800;margin:0"></p>
+    <div class="actions" style="justify-content:center">
+      <button type="button" class="danger" id="askYes">삭제</button>
+      <button type="button" class="ghost" id="askNo">취소</button>
+    </div>
   </div>
 </div>
 <div id="splitModal" class="modal-back hidden">
@@ -468,7 +480,23 @@ function rewardGroups(){
   });
   return [...map.entries()];
 }
+let askAction = null;
 let pickMode = "";
+function askDelete(text, action){
+  askAction = action;
+  document.getElementById("askText").textContent = text;
+  document.getElementById("askModal").classList.remove("hidden");
+}
+document.getElementById("askNo").onclick = () => {
+  askAction = null;
+  document.getElementById("askModal").classList.add("hidden");
+};
+document.getElementById("askYes").onclick = () => {
+  const fn = askAction;
+  askAction = null;
+  document.getElementById("askModal").classList.add("hidden");
+  if (fn) fn();
+};
 let pickRow = -1;
 let pickFloor = "1";
 function renderPick(){
@@ -477,12 +505,12 @@ function renderPick(){
   if (pickMode === "boss") {
     done.classList.add("hidden");
     document.getElementById("pickFloors").classList.remove("hidden");
-    document.getElementById("pickFloors").innerHTML = FLOORS.map(f => '<button type="button" class="'+(f.id===pickFloor?"btn":"ghost")+'" data-pick-floor="'+f.id+'">'+f.label+"</button>").join("");
+    document.getElementById("pickFloors").innerHTML = '<div class="muted" style="width:100%">장소</div>'+FLOORS.map(f => '<button type="button" class="floor-tab'+(f.id===pickFloor?" on":"")+'" data-pick-floor="'+f.id+'">'+f.label+"</button>").join("");
     document.querySelectorAll("[data-pick-floor]").forEach(el => el.onclick = () => { pickFloor = el.dataset.pickFloor; renderPick(); });
     const bosses = state.bosses.filter(b => floorOf(b) === pickFloor);
     list.innerHTML = bosses.length
-      ? '<div class="chips">'+bosses.map(b => '<button type="button" class="ghost" data-pick-boss="'+esc(b)+'">'+esc(b)+"</button>").join("")+"</div>"
-      : "<p class='muted'>이 층에 보스가 없습니다.</p>";
+      ? '<div class="muted">보스</div>'+bosses.map(b => '<button type="button" class="boss-pick" data-pick-boss="'+esc(b)+'">'+esc(b)+"</button>").join("")
+      : "<p class='muted'>이 장소에 보스가 없습니다.</p>";
     list.querySelectorAll("[data-pick-boss]").forEach(el => el.onclick = () => {
       setBoss(el.dataset.pickBoss);
       document.getElementById("pickModal").classList.add("hidden");
@@ -550,7 +578,11 @@ function renderPeople(){
   }).join("") || '<p class="muted">참가자를 추가하세요.</p>';
   document.querySelectorAll("#people select").forEach(el => el.onchange = () => { people[el.dataset.i].name = el.value; renderPeople(); });
   document.querySelectorAll("#people input").forEach(el => el.oninput = () => { people[el.dataset.i].score = el.value; draw(); preview(); });
-  document.querySelectorAll("#people [data-del]").forEach(el => el.onclick = () => { people.splice(Number(el.dataset.del),1); renderPeople(); });
+  document.querySelectorAll("#people [data-del]").forEach(el => el.onclick = () => {
+    const i = Number(el.dataset.del);
+    const name = people[i] && people[i].name;
+    askDelete((name||"참가자")+"을 뺄까요?", () => { people.splice(i,1); renderPeople(); });
+  });
   preview();
   if (!spinning) draw();
 }
@@ -660,8 +692,9 @@ function renderRewardRows(){
     else { rewardDraft[i].even = false; rewardDraft[i].recipients = []; renderRewardRows(); }
   });
   box.querySelectorAll("[data-rd]").forEach(el => el.onclick = () => {
-    rewardDraft.splice(Number(el.dataset.rd), 1);
-    renderRewardRows();
+    const i = Number(el.dataset.rd);
+    const name = rewardDraft[i] && rewardDraft[i].name;
+    askDelete((name||"보상")+"을 뺄까요?", () => { rewardDraft.splice(i, 1); renderRewardRows(); });
   });
 }
 function openSplit(i){
@@ -742,9 +775,12 @@ function showSchedule(){
   }).join("");
   box.querySelectorAll("[data-drop]").forEach(el => el.onclick = () => {
     if (spinning) return;
-    state.schedules = (state.schedules||[]).filter(s => s.id !== el.dataset.drop);
-    save();
-    showSchedule();
+    const id = el.dataset.drop;
+    askDelete("이 룰렛을 지울까요?", () => {
+      state.schedules = (state.schedules||[]).filter(s => s.id !== id);
+      save();
+      showSchedule();
+    });
   });
   ready = null;
   if (!spinning) draw();
@@ -1090,9 +1126,12 @@ function renderHistory(){
   document.querySelectorAll("[data-del-hist]").forEach(el => el.onclick = e => {
     e.stopPropagation();
     if (!leadMode || spinning) return;
-    state.history = state.history.filter(h => h.id !== el.dataset.delHist);
-    save();
-    renderHistory();
+    const id = el.dataset.delHist;
+    askDelete("이 기록을 지울까요?", () => {
+      state.history = state.history.filter(h => h.id !== id);
+      save();
+      renderHistory();
+    });
   });
 }
 document.getElementById("q").oninput = renderHistory;
@@ -1168,24 +1207,34 @@ function renderSettings(){
   document.querySelectorAll("[data-boss]").forEach(el => el.onclick = () => {
     const i = Number(el.dataset.boss);
     const name = state.bosses[i];
-    state.bosses.splice(i, 1);
-    if (name && state.bossFloors) delete state.bossFloors[name];
-    save();
-    fillSelects();
-    renderSettings();
+    askDelete((name||"보스")+"을 지울까요?", () => {
+      state.bosses.splice(i, 1);
+      if (name && state.bossFloors) delete state.bossFloors[name];
+      save();
+      fillSelects();
+      renderSettings();
+    });
   });
   document.getElementById("memberEdit").innerHTML = state.members.map((m,i) => '<div class="row" style="margin-top:8px"><span>'+esc(m)+" · "+esc(roleOf(m))+'</span><button type="button" class="danger" data-member="'+i+'">삭제</button></div>').join("");
   document.querySelectorAll("[data-member]").forEach(el => el.onclick = () => {
-    state.members.splice(Number(el.dataset.member), 1);
-    save();
-    renderSettings();
+    const i = Number(el.dataset.member);
+    const name = state.members[i];
+    askDelete((name||"길드원")+"을 지울까요?", () => {
+      state.members.splice(i, 1);
+      save();
+      renderSettings();
+    });
   });
   document.getElementById("rewardList").innerHTML = (state.rewards||[]).map((b,i) => '<div class="row" style="margin-top:8px"><span>'+esc(b)+'</span><button type="button" class="danger" data-reward="'+i+'">삭제</button></div>').join("");
   document.querySelectorAll("[data-reward]").forEach(el => el.onclick = () => {
-    state.rewards.splice(Number(el.dataset.reward), 1);
-    save();
-    fillSelects();
-    renderSettings();
+    const i = Number(el.dataset.reward);
+    const name = state.rewards[i];
+    askDelete((name||"보상")+"을 목록에서 지울까요?", () => {
+      state.rewards.splice(i, 1);
+      save();
+      fillSelects();
+      renderSettings();
+    });
   });
 }
 document.getElementById("addBoss").onclick = () => {
