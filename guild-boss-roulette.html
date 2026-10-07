@@ -416,9 +416,12 @@ function occupationNames(){
   const list = state.rewards || [];
   const a = list.indexOf("개구리음표");
   const b = list.indexOf("악어구슬");
-  if (a < 0 || b < 0) return new Set(["개구리음표","악어비늘","원숭이바나나","오리알","길드점령전구슬","오리구슬","악어구슬"]);
-  const i = Math.min(a, b), j = Math.max(a, b);
-  return new Set(list.slice(i, j + 1));
+  const names = new Set(["개구리음표","악어비늘","원숭이바나나","오리알","길드점령전구슬","오리구슬","악어구슬","개구리구슬","원숭이구슬"]);
+  if (a >= 0 && b >= 0) {
+    const i = Math.min(a, b), j = Math.max(a, b);
+    list.slice(i, j + 1).forEach(n => names.add(n));
+  }
+  return names;
 }
 function rewardCategory(name){
   if (occupationNames().has(name)) return "점령전보상";
