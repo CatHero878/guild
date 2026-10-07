@@ -487,19 +487,71 @@ function rewardGroups(){
 }
 let askAction = null;
 let pickMode = "";
+let navStack = [];
+let navSkip = 0;
+let navAfter = null;
+function pushNav(){
+  navStack.push(1);
+  history.pushState({nav:navStack.length}, "");
+}
+function popNav(){
+  if (!navStack.length) return;
+  navSkip++;
+  navStack.pop();
+  history.back();
+}
+function clearNav(after){
+  if (!navStack.length) { if (after) after(); return; }
+  const n = navStack.length;
+  navStack = [];
+  navAfter = after || null;
+  navSkip++;
+  setTimeout(() => history.go(-n), 0);
+}
+window.addEventListener("popstate", () => {
+  if (navSkip > 0) {
+    navSkip--;
+    if (!navSkip && navAfter) { const fn = navAfter; navAfter = null; fn(); }
+    return;
+  }
+  if (navStack.length) navStack.pop();
+  applyBack();
+});
+function layerOpen(id){
+  const el = document.getElementById(id);
+  return !!(el && !el.classList.contains("hidden"));
+}
+function applyBack(){
+  if (layerOpen("askModal")) {
+    askAction = null;
+    document.getElementById("askModal").classList.add("hidden");
+    return;
+  }
+  if (layerOpen("splitModal")) { cancelSplit(); return; }
+  if (layerOpen("pickModal")) { document.getElementById("pickModal").classList.add("hidden"); return; }
+  if (layerOpen("modal")) { closeWinner(); return; }
+  if (layerOpen("resultModal")) { resultBackStep(); return; }
+  if (layerOpen("wheelStage")) {
+    if (spinning) { pushNav(); return; }
+    document.getElementById("wheelStage").classList.add("hidden");
+  }
+}
 function askDelete(text, action){
   askAction = action;
   document.getElementById("askText").textContent = text;
   document.getElementById("askModal").classList.remove("hidden");
+  pushNav();
 }
 document.getElementById("askNo").onclick = () => {
   askAction = null;
   document.getElementById("askModal").classList.add("hidden");
+  popNav();
 };
 document.getElementById("askYes").onclick = () => {
   const fn = askAction;
   askAction = null;
   document.getElementById("askModal").classList.add("hidden");
+  popNav();
   if (fn) fn();
 };
 let pickRow = -1;
@@ -519,6 +571,7 @@ function renderPick(){
     list.querySelectorAll("[data-pick-boss]").forEach(el => el.onclick = () => {
       setBoss(el.dataset.pickBoss);
       document.getElementById("pickModal").classList.add("hidden");
+      popNav();
     });
     return;
   }
@@ -534,6 +587,7 @@ function renderPick(){
   list.querySelectorAll("[data-pick-reward]").forEach(el => el.onclick = () => {
     if (rewardDraft[pickRow]) rewardDraft[pickRow].name = el.dataset.pickReward;
     document.getElementById("pickModal").classList.add("hidden");
+    popNav();
     renderRewardRows();
   });
 }
@@ -544,6 +598,7 @@ function openBossPick(){
   document.getElementById("pickTitle").textContent = "보스";
   renderPick();
   document.getElementById("pickModal").classList.remove("hidden");
+  pushNav();
 }
 function openRewardPick(i){
   pickMode = "reward";
@@ -551,9 +606,13 @@ function openRewardPick(i){
   document.getElementById("pickTitle").textContent = "보상";
   renderPick();
   document.getElementById("pickModal").classList.remove("hidden");
+  pushNav();
 }
 document.getElementById("bossPick").onclick = openBossPick;
-document.getElementById("pickClose").onclick = () => document.getElementById("pickModal").classList.add("hidden");
+document.getElementById("pickClose").onclick = () => {
+  document.getElementById("pickModal").classList.add("hidden");
+  popNav();
+};
 document.getElementById("pickDone").onclick = () => {
   const adds = [];
   document.querySelectorAll("#pickList [data-add-name]:checked").forEach(el => {
@@ -564,6 +623,7 @@ document.getElementById("pickDone").onclick = () => {
   const start = rewardDraft.length;
   rewardDraft.push(...adds);
   document.getElementById("pickModal").classList.add("hidden");
+  popNav();
   renderRewardRows();
   const input = document.querySelectorAll("#rewardRows [data-rq]")[start];
   if (input) { input.focus(); input.select(); }
@@ -721,6 +781,15 @@ function openSplit(i){
     '<label class="inline"><input type="checkbox" data-split-i="'+idx+'"'+(selected.has(n)?" checked":"")+">"+esc(n)+"</label>"
   ).join("");
   document.getElementById("splitModal").classList.remove("hidden");
+  pushNav();
+}
+function cancelSplit(){
+  if (splitIndex >= 0 && rewardDraft[splitIndex]) {
+    rewardDraft[splitIndex].even = false;
+    rewardDraft[splitIndex].recipients = [];
+  }
+  document.getElementById("splitModal").classList.add("hidden");
+  renderRewardRows();
 }
 document.getElementById("splitAll").onclick = () => {
   document.querySelectorAll("#splitPeople input").forEach(el => { el.checked = true; });
@@ -732,21 +801,16 @@ document.getElementById("splitOk").onclick = () => {
   rewardDraft[splitIndex].even = true;
   rewardDraft[splitIndex].recipients = checked;
   document.getElementById("splitModal").classList.add("hidden");
+  popNav();
   renderRewardRows();
 };
-document.getElementById("splitCancel").onclick = () => {
-  if (splitIndex >= 0 && rewardDraft[splitIndex]) {
-    rewardDraft[splitIndex].even = false;
-    rewardDraft[splitIndex].recipients = [];
-  }
-  document.getElementById("splitModal").classList.add("hidden");
-  renderRewardRows();
-};
+document.getElementById("splitCancel").onclick = () => { cancelSplit(); popNav(); };
 document.getElementById("addRewardRow").onclick = () => {
   pickMode = "reward-add";
   document.getElementById("pickTitle").textContent = "보상";
   renderPick();
   document.getElementById("pickModal").classList.remove("hidden");
+  pushNav();
 };
 function syncRewardDraft(){
   document.querySelectorAll("[data-rq]").forEach(el => { if (rewardDraft[el.dataset.rq]) rewardDraft[el.dataset.rq].qty = Number(el.value)||0; });
@@ -900,6 +964,7 @@ function showWinner(s, replay){
   document.getElementById("winDetail").innerHTML = esc(s.boss)+"<br>"+rewardLines(s, true);
   currentResult = s;
   document.getElementById("modal").classList.remove("hidden");
+  pushNav();
 }
 function finishSchedule(){
   const s = state.schedule;
@@ -942,15 +1007,19 @@ function trySpin(){
   }
   state.schedule = due;
   hideSetup();
-  document.getElementById("splitModal").classList.add("hidden");
-  document.getElementById("pickModal").classList.add("hidden");
   show("roulette");
   ready = due.entries;
-  document.getElementById("wheelStage").classList.remove("hidden");
-  document.getElementById("spinInfo").textContent = due.boss || "";
-  const queue = spinQueue(due);
-  if (!queue.length) { finishSchedule(); return; }
-  playQueue(due.entries, queue, finishSchedule, due.boss);
+  clearNav(() => {
+    document.getElementById("splitModal").classList.add("hidden");
+    document.getElementById("pickModal").classList.add("hidden");
+    document.getElementById("askModal").classList.add("hidden");
+    document.getElementById("wheelStage").classList.remove("hidden");
+    document.getElementById("spinInfo").textContent = due.boss || "";
+    pushNav();
+    const queue = spinQueue(due);
+    if (!queue.length) { finishSchedule(); return; }
+    playQueue(due.entries, queue, finishSchedule, due.boss);
+  });
 }
 function startReplay(row){
   if (!row || spinning || holdSpin) return;
@@ -958,6 +1027,7 @@ function startReplay(row){
   ready = row.entries || [];
   document.getElementById("wheelStage").classList.remove("hidden");
   document.getElementById("spinInfo").textContent = row.boss || "";
+  pushNav();
   const queue = spinQueue(row);
   if (!queue.length) { showWinner(row, true); return; }
   playQueue(row.entries || [], queue, () => showWinner(row, true), row.boss);
@@ -1065,8 +1135,10 @@ function closeWinner(){
   document.getElementById("modal").classList.add("hidden");
   document.getElementById("wheelStage").classList.add("hidden");
   holdSpin = false;
-  if (!spinning) showSchedule();
-  trySpin();
+  clearNav(() => {
+    if (!spinning) showSchedule();
+    trySpin();
+  });
 }
 document.getElementById("closeModal").onclick = closeWinner;
 document.getElementById("shareYes").onclick = () => {
@@ -1122,13 +1194,13 @@ function renderResult(){
   const rewards = normalizeRewards(row);
   if (resultView === "home") {
     box.innerHTML = '<div class="choice-row"><button type="button" class="choice" id="viewRewards">보상명</button><button type="button" class="choice" id="viewNames">닉네임</button></div>';
-    document.getElementById("viewRewards").onclick = () => { resultView = "rewards"; renderResult(); };
-    document.getElementById("viewNames").onclick = () => { resultView = "names"; renderResult(); };
+    document.getElementById("viewRewards").onclick = () => { resultView = "rewards"; renderResult(); pushNav(); };
+    document.getElementById("viewNames").onclick = () => { resultView = "names"; renderResult(); pushNav(); };
     return;
   }
   if (resultView === "rewards") {
     box.innerHTML = rewards.length ? rewards.map((r,i) => '<button type="button" class="pick-row" data-rr="'+i+'">'+esc(r.name)+"</button>").join("") : "<p class='muted'>보상이 없습니다.</p>";
-    box.querySelectorAll("[data-rr]").forEach(el => el.onclick = () => { resultKey = el.dataset.rr; resultView = "rewardDetail"; renderResult(); });
+    box.querySelectorAll("[data-rr]").forEach(el => el.onclick = () => { resultKey = el.dataset.rr; resultView = "rewardDetail"; renderResult(); pushNav(); });
     return;
   }
   if (resultView === "rewardDetail") {
@@ -1145,7 +1217,7 @@ function renderResult(){
   if (resultView === "names") {
     const names = [...byName.entries()].sort((a,b) => b[1].reduce((s,x)=>s+x.qty,0) - a[1].reduce((s,x)=>s+x.qty,0));
     box.innerHTML = names.length ? names.map(([n]) => '<button type="button" class="pick-row" data-nn="'+esc(n)+'">'+esc(n)+"</button>").join("") : "<p class='muted'>없습니다.</p>";
-    box.querySelectorAll("[data-nn]").forEach(el => el.onclick = () => { resultKey = el.dataset.nn; resultView = "nameDetail"; renderResult(); });
+    box.querySelectorAll("[data-nn]").forEach(el => el.onclick = () => { resultKey = el.dataset.nn; resultView = "nameDetail"; renderResult(); pushNav(); });
     return;
   }
   const mine = byName.get(resultKey) || [];
@@ -1159,6 +1231,14 @@ function openResult(row){
   document.getElementById("resultBoss").textContent = row.boss || "";
   renderResult();
   document.getElementById("resultModal").classList.remove("hidden");
+  pushNav();
+}
+function resultBackStep(){
+  if (resultView === "rewardDetail") resultView = "rewards";
+  else if (resultView === "nameDetail") resultView = "names";
+  else if (resultView !== "home") resultView = "home";
+  else { document.getElementById("resultModal").classList.add("hidden"); return; }
+  renderResult();
 }
 function renderHistory(){
   const q = document.getElementById("q").value.trim().toLowerCase();
@@ -1188,17 +1268,18 @@ function renderHistory(){
 }
 document.getElementById("q").oninput = renderHistory;
 document.getElementById("resultShare").onclick = () => shareKakao(currentResult);
-document.getElementById("resultClose").onclick = () => document.getElementById("resultModal").classList.add("hidden");
+document.getElementById("resultClose").onclick = () => {
+  document.getElementById("resultModal").classList.add("hidden");
+  clearNav();
+};
 document.getElementById("resultBack").onclick = () => {
-  if (resultView === "rewardDetail") resultView = "rewards";
-  else if (resultView === "nameDetail") resultView = "names";
-  else resultView = "home";
-  renderResult();
+  resultBackStep();
+  popNav();
 };
 document.getElementById("resultReplay").onclick = () => {
   const row = currentResult;
   document.getElementById("resultModal").classList.add("hidden");
-  if (row) startReplay(row);
+  clearNav(() => { if (row) startReplay(row); });
 };
 function roleOf(name){
   const roles = [];
