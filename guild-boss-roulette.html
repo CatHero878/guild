@@ -1560,19 +1560,29 @@ setInterval(pullCloud, 4000);
   const normal = cat.src;
   const glare = "guild-cat-glare.png";
   let taps = 0;
-  let gap = 0;
-  let back = 0;
+  let side = 0;
+  let timers = [];
   let busy = false;
+  function later(fn, ms){
+    const id = setTimeout(fn, ms);
+    timers.push(id);
+  }
+  function stopGlance(){
+    timers.forEach(clearTimeout);
+    timers = [];
+  }
   function glance(){
+    stopGlance();
+    side = 1 - side;
+    cat.classList.remove("look-left", "look-right");
+    cat.src = normal;
+    void cat.offsetWidth;
     cat.src = glare;
-    cat.classList.add("look-left");
-    cat.classList.remove("look-right");
-    clearTimeout(back);
-    setTimeout(() => { cat.classList.add("look-right"); cat.classList.remove("look-left"); }, 140);
-    back = setTimeout(() => {
+    cat.classList.add(side ? "look-left" : "look-right");
+    later(() => {
       cat.classList.remove("look-left", "look-right");
       cat.src = normal;
-    }, 380);
+    }, 460);
   }
   function spitScreen(){
     if (busy) return;
@@ -1649,14 +1659,8 @@ setInterval(pullCloud, 4000);
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     taps++;
-    clearTimeout(gap);
-    gap = setTimeout(() => { taps = 0; }, 1200);
     glance();
-    if (taps >= 5) {
-      taps = 0;
-      clearTimeout(gap);
-      setTimeout(spitScreen, 180);
-    }
+    if (taps % 5 === 0) setTimeout(spitScreen, 160);
   });
 })();
 </script>
