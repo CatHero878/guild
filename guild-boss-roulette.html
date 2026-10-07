@@ -63,10 +63,14 @@
   .wheel-one canvas { width:100%; height:auto; display:block; }
   .pointer { position:absolute; top:4px; width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent; border-top:16px solid #2b1a0e; }
   .hist-box { position:relative; border-bottom:2px solid #e7cba6; }
-  button.hist { display:block; width:100%; text-align:left; background:transparent; border:0; box-shadow:none; border-radius:0; padding:12px 36px 12px 4px; font-weight:800; color:var(--ink); }
+  button.hist { display:block; width:100%; text-align:left; background:transparent; border:0; box-shadow:none; border-radius:0; padding:12px 28px 12px 4px; font-weight:800; color:var(--ink); }
+  .hist-x { position:absolute; top:6px; right:0; width:22px; height:22px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; color:#c4472a; font-size:20px; line-height:20px; font-weight:800; }
   .floor-tab { background:#efe2c4; color:#3a2414; border:2px solid #8a6a3b; border-radius:99px; padding:6px 10px; font-weight:800; box-shadow:none; font-size:13px; }
   .floor-tab.on { background:#2b1a0e; color:#ffe7a3; }
-  .boss-pick { display:block; width:100%; text-align:left; background:#fff; border:0; border-bottom:2px solid #e7cba6; border-radius:0; box-shadow:none; padding:12px 8px; font-weight:800; color:var(--ink); }
+  .choice-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
+  .choice { background:#ffd34d; color:#3a2414; border:3px solid #2b1a0e; border-radius:14px; box-shadow:0 4px 0 #2b1a0e; padding:16px 8px; font-weight:800; font-size:16px; }
+  .pick-row { display:block; width:100%; text-align:left; background:#fff8e8; border:2px solid #c9843a; border-radius:12px; box-shadow:none; padding:12px; margin-top:8px; font-weight:800; color:#3a2414; }
+  .boss-pick { display:block; width:100%; text-align:left; background:#fff8e8; border:0; border-bottom:2px solid #e7cba6; border-radius:0; box-shadow:none; padding:12px 8px; font-weight:800; color:var(--ink); }
   #askModal { z-index:40; }
   .muted { color:var(--muted); }
   .bar { height:8px; background:#f0d7a2; border-radius:99px; overflow:hidden; border:2px solid #2b1a0e; }
@@ -1117,20 +1121,20 @@ function renderResult(){
   back.classList.toggle("hidden", resultView === "home");
   const rewards = normalizeRewards(row);
   if (resultView === "home") {
-    box.innerHTML = '<div class="actions" style="justify-content:center"><button type="button" class="btn" id="viewRewards">보상명</button><button type="button" class="btn" id="viewNames">닉네임</button></div>';
+    box.innerHTML = '<div class="choice-row"><button type="button" class="choice" id="viewRewards">보상명</button><button type="button" class="choice" id="viewNames">닉네임</button></div>';
     document.getElementById("viewRewards").onclick = () => { resultView = "rewards"; renderResult(); };
     document.getElementById("viewNames").onclick = () => { resultView = "names"; renderResult(); };
     return;
   }
   if (resultView === "rewards") {
-    box.innerHTML = rewards.length ? rewards.map((r,i) => '<button type="button" class="boss-pick" data-rr="'+i+'">'+esc(r.name)+"</button>").join("") : "<p class='muted'>보상이 없습니다.</p>";
+    box.innerHTML = rewards.length ? rewards.map((r,i) => '<button type="button" class="pick-row" data-rr="'+i+'">'+esc(r.name)+"</button>").join("") : "<p class='muted'>보상이 없습니다.</p>";
     box.querySelectorAll("[data-rr]").forEach(el => el.onclick = () => { resultKey = el.dataset.rr; resultView = "rewardDetail"; renderResult(); });
     return;
   }
   if (resultView === "rewardDetail") {
     const r = rewards[Number(resultKey)];
     if (!r) { resultView = "rewards"; renderResult(); return; }
-    box.innerHTML = '<div class="muted">'+esc(r.name)+" x"+(r.qty||1)+"</div>"+takenOf(r).map(s => '<div class="boss-pick">'+esc(s.name)+" "+s.qty+"</div>").join("");
+    box.innerHTML = '<div class="muted">'+esc(r.name)+" x"+(r.qty||1)+"</div>"+takenOf(r).map(s => '<div class="pick-row">'+esc(s.name)+" "+s.qty+"</div>").join("");
     return;
   }
   const byName = new Map();
@@ -1140,12 +1144,12 @@ function renderResult(){
   }));
   if (resultView === "names") {
     const names = [...byName.entries()].sort((a,b) => b[1].reduce((s,x)=>s+x.qty,0) - a[1].reduce((s,x)=>s+x.qty,0));
-    box.innerHTML = names.length ? names.map(([n]) => '<button type="button" class="boss-pick" data-nn="'+esc(n)+'">'+esc(n)+"</button>").join("") : "<p class='muted'>없습니다.</p>";
+    box.innerHTML = names.length ? names.map(([n]) => '<button type="button" class="pick-row" data-nn="'+esc(n)+'">'+esc(n)+"</button>").join("") : "<p class='muted'>없습니다.</p>";
     box.querySelectorAll("[data-nn]").forEach(el => el.onclick = () => { resultKey = el.dataset.nn; resultView = "nameDetail"; renderResult(); });
     return;
   }
   const mine = byName.get(resultKey) || [];
-  box.innerHTML = '<div class="muted">'+esc(resultKey)+"</div>"+mine.map(s => '<div class="boss-pick">'+esc(s.reward)+" "+s.qty+"</div>").join("");
+  box.innerHTML = '<div class="muted">'+esc(resultKey)+"</div>"+mine.map(s => '<div class="pick-row">'+esc(s.reward)+" "+s.qty+"</div>").join("");
 }
 function openResult(row){
   currentResult = row;
@@ -1164,7 +1168,7 @@ function renderHistory(){
   });
   document.getElementById("history").innerHTML = rows.length ? rows.map(h => {
     const when = h.date || String(fmt(h.startAt)).slice(0,10);
-    const x = leadMode ? '<button type="button" class="danger hist-x" data-del-hist="'+h.id+'">×</button>' : "";
+    const x = leadMode ? '<button type="button" class="hist-x" data-del-hist="'+h.id+'">×</button>' : "";
     return '<div class="hist-box">'+x+'<button type="button" class="hist" data-hist="'+h.id+'">'+esc(when)+" · "+esc(h.boss||"")+"<br>"+esc(rewardNames(h))+"</button></div>";
   }).join("") : "";
   document.querySelectorAll("[data-hist]").forEach(el => el.onclick = () => {
