@@ -488,12 +488,7 @@ function renderPick(){
   const groups = rewardGroups();
   if (pickMode === "reward-add") {
     done.classList.remove("hidden");
-    list.innerHTML = groups.length ? groups.map(([cat, names]) => '<div class="cat">'+esc(cat)+'</div>'+names.map(n => '<div class="row" style="margin:6px 0"><label class="inline" style="flex:1"><input type="checkbox" data-add-name="'+esc(n)+'">'+esc(n)+'</label><input data-add-qty type="number" min="1" value="1" disabled style="flex:0 0 64px;width:64px"></div>').join("")).join("") : "<p class='muted'>설정에서 보상을 추가하세요.</p>";
-    list.querySelectorAll("[data-add-name]").forEach(el => el.onchange = () => {
-      const qty = el.closest(".row").querySelector("[data-add-qty]");
-      qty.disabled = !el.checked;
-      if (el.checked && !(Number(qty.value) >= 1)) qty.value = 1;
-    });
+    list.innerHTML = groups.length ? groups.map(([cat, names]) => '<div class="cat">'+esc(cat)+'</div>'+names.map(n => '<label class="inline" style="display:flex;margin:6px 0"><input type="checkbox" data-add-name="'+esc(n)+'">'+esc(n)+'</label>').join("")).join("") : "<p class='muted'>설정에서 보상을 추가하세요.</p>";
     return;
   }
   done.classList.add("hidden");
@@ -524,14 +519,16 @@ document.getElementById("pickClose").onclick = () => document.getElementById("pi
 document.getElementById("pickDone").onclick = () => {
   const adds = [];
   document.querySelectorAll("#pickList [data-add-name]:checked").forEach(el => {
-    const n = Math.max(1, Math.floor(Number(el.closest(".row").querySelector("[data-add-qty]").value)||1));
-    for (let i = 0; i < n; i++) adds.push({name:el.dataset.addName, qty:1, even:false, recipients:[], mode:"all"});
+    adds.push({name:el.dataset.addName, qty:1, even:false, recipients:[], mode:"all"});
   });
   if (!adds.length) return alert("보상을 체크하세요.");
   rewardDraft = rewardDraft.filter(r => String(r.name||"").trim());
+  const start = rewardDraft.length;
   rewardDraft.push(...adds);
   document.getElementById("pickModal").classList.add("hidden");
   renderRewardRows();
+  const input = document.querySelectorAll("#rewardRows [data-rq]")[start];
+  if (input) { input.focus(); input.select(); }
 };
 function fillSelects(){
   setBoss(document.getElementById("boss").value);
