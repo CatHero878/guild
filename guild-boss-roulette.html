@@ -151,6 +151,7 @@
             <option value="1" selected>격전지(1층)</option>
             <option value="2">격전지(2층)</option>
             <option value="3">격전지(3층)</option>
+            <option value="4">점령전</option>
           </select>
           <button type="button" class="ghost" id="addBoss">추가</button>
         </div>
@@ -217,7 +218,8 @@ const FLOORS = [
   {id:"0", label:"격전지(하층)"},
   {id:"1", label:"격전지(1층)"},
   {id:"2", label:"격전지(2층)"},
-  {id:"3", label:"격전지(3층)"}
+  {id:"3", label:"격전지(3층)"},
+  {id:"4", label:"점령전"}
 ];
 const state = load();
 let people = [];
@@ -246,6 +248,14 @@ if (!state.dpsByBoss) state.dpsByBoss = {};
 if (!state.bossFloors) state.bossFloors = {};
 if (!state.history) state.history = [];
 if (!Array.isArray(state.schedules)) state.schedules = [];
+function ensureOccupation(){
+  let changed = false;
+  if (!state.bosses.includes("점령전보상")) { state.bosses.push("점령전보상"); changed = true; }
+  if (!state.bossFloors) state.bossFloors = {};
+  if (String(state.bossFloors["점령전보상"]) !== "4") { state.bossFloors["점령전보상"] = "4"; changed = true; }
+  return changed;
+}
+if (ensureOccupation()) save();
 if (queryDb) state.firebaseUrl = queryDb;
 if (queryRoom) state.room = queryRoom;
 function payload(){
@@ -290,7 +300,8 @@ async function pullCloud(){
     if (!state.bossFloors) state.bossFloors = {};
     if (!state.history) state.history = [];
     if (!Array.isArray(state.schedules)) state.schedules = [];
-    localStorage.setItem(KEY, JSON.stringify(state));
+    if (ensureOccupation()) save();
+    else localStorage.setItem(KEY, JSON.stringify(state));
     adoptSchedule();
     fillSelects();
     renderPeople();
@@ -319,6 +330,7 @@ function fmtFull(ts){
 }
 function guessFloor(name){
   const n = String(name||"");
+  if (/점령/.test(n)) return "4";
   if (/바나냥|루나|루니|루이/.test(n)) return "2";
   if (/해적|고양이|음식|늑대/.test(n)) return "1";
   if (/하층/.test(n)) return "0";
@@ -400,7 +412,16 @@ function setBoss(name){
   document.getElementById("boss").value = name || "";
   document.getElementById("bossPick").textContent = name || "보스를 선택하세요";
 }
+function occupationNames(){
+  const list = state.rewards || [];
+  const a = list.indexOf("개구리음표");
+  const b = list.indexOf("악어구슬");
+  if (a < 0 || b < 0) return new Set(["개구리음표","악어비늘","원숭이바나나","오리알","길드점령전구슬","오리구슬","악어구슬"]);
+  const i = Math.min(a, b), j = Math.max(a, b);
+  return new Set(list.slice(i, j + 1));
+}
 function rewardCategory(name){
+  if (occupationNames().has(name)) return "점령전보상";
   const n = String(name || "");
   const nouns = ["목도리", "장갑", "신발", "모자", "소환서", "망토", "반지", "귀걸이", "룬"];
   for (const noun of nouns) if (n.includes(noun)) return noun;
