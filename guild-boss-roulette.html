@@ -1602,6 +1602,61 @@ setInterval(pullCloud, 4000);
   }
   if (base.complete) { ready = true; paint(0); }
   base.onload = () => { ready = true; paint(0); };
+  function brow(){
+    ctx.strokeStyle = "#2a2a2a";
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(124,132); ctx.quadraticCurveTo(140,118,156,132);
+    ctx.moveTo(126,140); ctx.quadraticCurveTo(140,128,156,140);
+    ctx.stroke();
+  }
+  function cheek(x, y, fat){
+    ctx.beginPath();
+    ctx.ellipse(x, y, 18*fat, 13*fat, 0, 0, Math.PI*2);
+    ctx.fillStyle = fat > 1.2 ? "#f8ead4" : "#e6d2ba";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#2b1a0e";
+    ctx.stroke();
+  }
+  function paintGather(puff, open){
+    if (!ready) return;
+    ctx.clearRect(0,0,280,260);
+    ctx.drawImage(base,0,0,280,260);
+    brow();
+    const left = puff > 0 ? 1.6 : puff < 0 ? 0.82 : 1.35;
+    const right = puff < 0 ? 1.6 : puff > 0 ? 0.82 : 1.35;
+    cheek(76, 192, left);
+    cheek(204, 192, right);
+    ctx.beginPath();
+    ctx.ellipse(140, 208, 24, 16, 0, 0, Math.PI*2);
+    ctx.fillStyle = "#f4e6cc";
+    ctx.fill();
+    if (!open) {
+      ctx.strokeStyle = "#1b1b1b";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(124 + puff*5, 206);
+      ctx.quadraticCurveTo(140 + puff*5, 214, 156 + puff*5, 206);
+      ctx.stroke();
+      return;
+    }
+    ctx.beginPath();
+    ctx.ellipse(140, 210, 12, 10, 0, 0, Math.PI*2);
+    ctx.fillStyle = "#161616";
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#2b1a0e";
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(140, 212, 5, 4, 0, 0, Math.PI*2);
+    ctx.fillStyle = "#e7a0b4";
+    ctx.fill();
+  }
+  function mouthPoint(){
+    const r = hit.getBoundingClientRect();
+    return { x: r.left + (140/280)*r.width, y: r.top + (210/260)*r.height };
+  }
   function glance(){
     clearTimeout(timer);
     side = side === -1 ? 1 : -1;
@@ -1609,7 +1664,6 @@ setInterval(pullCloud, 4000);
     timer = setTimeout(() => paint(0), 520);
   }
   function spitScreen(){
-    if (busy) return;
     busy = true;
     const layer = document.createElement("div");
     layer.id = "spitLayer";
@@ -1619,18 +1673,18 @@ setInterval(pullCloud, 4000);
     glob.alt = "";
     layer.appendChild(glob);
     document.body.appendChild(layer);
-    const r = hit.getBoundingClientRect();
-    const sx = r.left + r.width * 0.5;
-    const sy = r.top + r.height * 0.62;
+    const mouth = mouthPoint();
+    const sx = mouth.x;
+    const sy = mouth.y;
     const cx = innerWidth / 2;
     const cy = innerHeight / 2;
     glob.style.left = (sx - 46) + "px";
-    glob.style.top = (sy - 30) + "px";
+    glob.style.top = (sy - 24) + "px";
     glob.animate([
-      { transform:"translate(0,0) scale(.35) rotate(-12deg)", opacity:.2 },
-      { transform:"translate("+(cx-sx)+"px,"+((cy-sy)*0.4)+"px) scale(.8) rotate(8deg)", opacity:1, offset:.4 },
-      { transform:"translate("+(cx-sx)+"px,"+(cy-sy)+"px) scale(1.15) rotate(20deg)", opacity:1 }
-    ], { duration:420, easing:"cubic-bezier(.2,.65,.2,1)", fill:"forwards" }).onfinish = () => {
+      { transform:"translate(0,0) scale(.18) rotate(-8deg)", opacity:1 },
+      { transform:"translate("+(cx-sx)+"px,"+((cy-sy)*0.35)+"px) scale(.7) rotate(10deg)", opacity:1, offset:.35 },
+      { transform:"translate("+(cx-sx)+"px,"+(cy-sy)+"px) scale(1.15) rotate(18deg)", opacity:1 }
+    ], { duration:380, easing:"cubic-bezier(.15,.7,.2,1)", fill:"forwards" }).onfinish = () => {
       glob.remove();
       const sheet = document.createElement("img");
       sheet.src = "spit-sheet.png";
@@ -1653,6 +1707,7 @@ setInterval(pullCloud, 4000);
       setTimeout(() => {
         layer.remove();
         document.body.classList.remove("rained","restored");
+        paint(0);
         busy = false;
       }, 2800);
     };
@@ -1660,12 +1715,27 @@ setInterval(pullCloud, 4000);
   hit.addEventListener("contextmenu", e => e.preventDefault());
   hit.addEventListener("dragstart", e => e.preventDefault());
   base.addEventListener("contextmenu", e => e.preventDefault());
+  function gatherThenSpit(){
+    if (busy) return;
+    busy = true;
+    clearTimeout(timer);
+    let step = 0;
+    const beat = setInterval(() => {
+      paintGather(step % 2 ? -1 : 1, false);
+      step++;
+      if (step < 6) return;
+      clearInterval(beat);
+      paintGather(0, true);
+      setTimeout(spitScreen, 90);
+    }, 120);
+  }
   hit.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
+    if (busy) return;
     taps++;
-    glance();
-    if (taps % 5 === 0) setTimeout(spitScreen, 140);
+    if (taps % 5 === 0) gatherThenSpit();
+    else glance();
   });
 })();
 </script>
