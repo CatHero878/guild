@@ -15,16 +15,14 @@
   .wrap { max-width:980px; margin:0 auto; padding:22px 16px 48px; position:relative; z-index:2; }
   header { display:flex; align-items:center; justify-content:center; gap:10px; text-align:left;
     background:#6b4423; color:#ffe7a3; border:4px solid #2b1a0e; border-radius:16px; padding:8px 16px; box-shadow:0 6px 0 #2b1a0e; }
-  header img { width:86px; height:86px; object-fit:contain; border:0; background:transparent; flex:0 0 auto; filter:drop-shadow(2px 3px 0 #2b1a0e); cursor:pointer; touch-action:none; user-select:none; -webkit-user-select:none; }
-  header img.look-left { transform: rotate(-7deg); }
-  header img.look-right { transform: scaleX(-1) rotate(-7deg); }
-  body.rained .wrap { filter: blur(5px); transition: filter .35s linear; }
-  body.restored .wrap { filter: blur(0); transition: filter .7s ease; }
+  .cat-hit { position:relative; width:86px; height:80px; flex:0 0 auto; touch-action:none; -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none; user-select:none; }
+  .cat-hit img, .cat-hit canvas { width:86px; height:80px; object-fit:fill; border:0; background:transparent; filter:drop-shadow(2px 3px 0 #2b1a0e); pointer-events:none; -webkit-user-drag:none; display:block; }
+  .cat-hit canvas { position:absolute; inset:0; }
+  body.rained .wrap { filter: blur(4px); transition: filter .4s linear; }
+  body.restored .wrap { filter: blur(0); transition: filter .8s ease; }
   #spitLayer { position:fixed; inset:0; z-index:60; pointer-events:none; overflow:hidden; }
-  .loogie { position:fixed; width:64px; height:40px; border-radius:58% 42% 50% 46%; background:radial-gradient(circle at 32% 30%, #f4fbff, #8fdfff 46%, #3aa8d8); box-shadow:0 0 0 8px rgba(150,214,240,.35); }
-  .slime { position:fixed; left:50%; top:46%; width:80px; height:80px; border-radius:48% 52% 46% 54%; background:radial-gradient(circle at 50% 42%, rgba(232,248,255,.92), rgba(120,206,236,.78) 48%, rgba(70,176,214,.62) 72%, rgba(70,176,214,0) 74%); }
-  .splat { position:fixed; width:26px; height:16px; border-radius:50%; background:#7fd4f2; }
-  .drip { position:fixed; width:16px; height:28px; border-radius:0 0 16px 16px; background:linear-gradient(#8fdfff, rgba(143,223,255,0)); }
+  .loogie { position:fixed; width:92px; height:70px; object-fit:contain; filter:drop-shadow(0 6px 8px rgba(40,80,110,.25)); }
+  .sheet { position:fixed; left:50%; top:46%; width:120vmax; height:120vmax; object-fit:cover; transform:translate(-50%,-50%); }
   h1 { margin:0; font-size:32px; font-weight:800; letter-spacing:-.03em; }
   header .sub { margin:2px 0 0; color:#f0d7a2; font-size:13px; font-weight:600; }
   nav { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; border:0; margin:14px 0 8px; }
@@ -97,7 +95,7 @@
   @media (max-width:800px) {
     .grid { grid-template-columns:1fr; }
     h1 { font-size:26px; }
-    header img { width:72px; height:72px; }
+    .cat-hit, .cat-hit img, .cat-hit canvas { width:72px; height:67px; }
     #nowClock { font-size:32px; }
   }
 </style>
@@ -106,7 +104,10 @@
 <canvas id="fx"></canvas>
 <div class="wrap">
   <header>
-    <img id="guildCat" src="guild-cat-head.png" alt="" draggable="false" />
+    <div id="catHit" class="cat-hit">
+      <img id="guildCat" src="guild-cat-head.png" alt="" draggable="false" />
+      <canvas id="catEyes" width="280" height="260"></canvas>
+    </div>
     <div>
       <h1 id="title">우리 길드</h1>
     </div>
@@ -1555,112 +1556,116 @@ tickClock();
 setInterval(tickClock, 1000);
 setInterval(pullCloud, 4000);
 (function(){
-  const cat = document.getElementById("guildCat");
-  if (!cat) return;
-  const normal = cat.src;
-  const glare = "guild-cat-glare.png";
+  const hit = document.getElementById("catHit");
+  const canvas = document.getElementById("catEyes");
+  const base = document.getElementById("guildCat");
+  if (!hit || !canvas || !base) return;
+  const ctx = canvas.getContext("2d");
+  const eyes = [{x:86,y:154,rx:26,ry:15},{x:194,y:154,rx:26,ry:15}];
   let taps = 0;
   let side = 0;
-  let timers = [];
+  let timer = 0;
   let busy = false;
-  function later(fn, ms){
-    const id = setTimeout(fn, ms);
-    timers.push(id);
+  let ready = false;
+  function paint(dir){
+    if (!ready) return;
+    ctx.clearRect(0,0,280,260);
+    ctx.drawImage(base,0,0,280,260);
+    if (!dir) return;
+    eyes.forEach(e => {
+      ctx.fillStyle = "#8d8b8c";
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y, e.rx+6, e.ry+8, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y+3, e.rx, e.ry*0.55, 0, 0, Math.PI*2);
+      ctx.fillStyle = "#f4ebc4";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#1b1b1b";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(e.x + dir*9, e.y+4, 6.5, 7.5, 0, 0, Math.PI*2);
+      ctx.fillStyle = "#141414";
+      ctx.fill();
+      ctx.fillStyle = "#8d8b8c";
+      ctx.beginPath();
+      ctx.ellipse(e.x, e.y-2, e.rx+2, e.ry*0.85, 0, Math.PI*1.02, Math.PI*1.98);
+      ctx.fill();
+    });
+    ctx.strokeStyle = "#2a2a2a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(128,134); ctx.quadraticCurveTo(140,124,152,136);
+    ctx.moveTo(130,142); ctx.quadraticCurveTo(140,132,152,144);
+    ctx.stroke();
   }
-  function stopGlance(){
-    timers.forEach(clearTimeout);
-    timers = [];
-  }
+  if (base.complete) { ready = true; paint(0); }
+  base.onload = () => { ready = true; paint(0); };
   function glance(){
-    stopGlance();
-    side = 1 - side;
-    cat.classList.remove("look-left", "look-right");
-    cat.src = normal;
-    void cat.offsetWidth;
-    cat.src = glare;
-    cat.classList.add(side ? "look-left" : "look-right");
-    later(() => {
-      cat.classList.remove("look-left", "look-right");
-      cat.src = normal;
-    }, 460);
+    clearTimeout(timer);
+    side = side === -1 ? 1 : -1;
+    paint(side);
+    timer = setTimeout(() => paint(0), 520);
   }
   function spitScreen(){
     if (busy) return;
     busy = true;
     const layer = document.createElement("div");
     layer.id = "spitLayer";
-    const glob = document.createElement("div");
+    const glob = document.createElement("img");
+    glob.src = "spit-glob.png";
     glob.className = "loogie";
+    glob.alt = "";
     layer.appendChild(glob);
     document.body.appendChild(layer);
-    const r = cat.getBoundingClientRect();
-    const sx = r.left + r.width * 0.62;
-    const sy = r.top + r.height * 0.72;
+    const r = hit.getBoundingClientRect();
+    const sx = r.left + r.width * 0.5;
+    const sy = r.top + r.height * 0.62;
     const cx = innerWidth / 2;
     const cy = innerHeight / 2;
-    glob.style.left = (sx - 32) + "px";
-    glob.style.top = (sy - 20) + "px";
+    glob.style.left = (sx - 46) + "px";
+    glob.style.top = (sy - 30) + "px";
     glob.animate([
-      { transform:"translate(0,0) scale(.45) rotate(-8deg)", offset:0 },
-      { transform:"translate("+(cx-sx)+"px,"+((cy-sy)*0.45)+"px) scale(1) rotate(12deg)", offset:.45 },
-      { transform:"translate("+(cx-sx)+"px,"+(cy-sy)+"px) scale(1.6) rotate(28deg)", offset:1 }
-    ], { duration:460, easing:"cubic-bezier(.18,.7,.2,1)", fill:"forwards" }).onfinish = () => {
+      { transform:"translate(0,0) scale(.35) rotate(-12deg)", opacity:.2 },
+      { transform:"translate("+(cx-sx)+"px,"+((cy-sy)*0.4)+"px) scale(.8) rotate(8deg)", opacity:1, offset:.4 },
+      { transform:"translate("+(cx-sx)+"px,"+(cy-sy)+"px) scale(1.15) rotate(20deg)", opacity:1 }
+    ], { duration:420, easing:"cubic-bezier(.2,.65,.2,1)", fill:"forwards" }).onfinish = () => {
       glob.remove();
-      const slime = document.createElement("div");
-      slime.className = "slime";
-      layer.appendChild(slime);
-      for (let i = 0; i < 16; i++) {
-        const d = document.createElement("div");
-        d.className = "splat";
-        d.style.left = (cx - 13) + "px";
-        d.style.top = (cy - 8) + "px";
-        layer.appendChild(d);
-        const a = Math.random()*Math.PI*2;
-        const dist = 70 + Math.random()*260;
-        d.animate([
-          { transform:"translate(0,0) scale(.4)", opacity:1 },
-          { transform:"translate("+(Math.cos(a)*dist)+"px,"+(Math.sin(a)*dist)+"px) scale(1.2)", opacity:.85 }
-        ], { duration:320, fill:"forwards", easing:"ease-out" });
-      }
-      slime.animate([
-        { transform:"translate(-50%,-50%) scale(.2)", opacity:1, filter:"blur(0px)", offset:0 },
-        { transform:"translate(-50%,-50%) scale(26)", opacity:.96, filter:"blur(0px)", offset:.22 },
-        { transform:"translate(-50%,-46%) scale(28)", opacity:.9, filter:"blur(0px)", offset:.4 },
-        { transform:"translate(-50%,18%) scale(30,34)", opacity:.55, filter:"blur(7px)", offset:.72 },
-        { transform:"translate(-50%,70%) scale(32,38)", opacity:0, filter:"blur(12px)", offset:1 }
-      ], { duration:2800, easing:"cubic-bezier(.3,.05,.7,1)", fill:"forwards" });
-      for (let i = 0; i < 9; i++) {
-        const drip = document.createElement("div");
-        drip.className = "drip";
-        drip.style.left = (8 + Math.random()*(innerWidth-24)) + "px";
-        drip.style.top = (innerHeight*0.42) + "px";
-        drip.style.height = (40 + Math.random()*80) + "px";
-        layer.appendChild(drip);
-        drip.animate([
-          { transform:"translateY(0) scaleY(.4)", opacity:0 },
-          { transform:"translateY(30vh) scaleY(1)", opacity:.8, offset:.35 },
-          { transform:"translateY(78vh) scaleY(1.4)", opacity:0, filter:"blur(4px)" }
-        ], { duration:1800 + Math.random()*700, delay:500, fill:"forwards", easing:"ease-in" });
-      }
+      const sheet = document.createElement("img");
+      sheet.src = "spit-sheet.png";
+      sheet.className = "sheet";
+      sheet.alt = "";
+      layer.appendChild(sheet);
+      sheet.animate([
+        { opacity:0, transform:"translate(-50%,-50%) scale(.2)", filter:"blur(0px)" },
+        { opacity:.95, transform:"translate(-50%,-50%) scale(1)", filter:"blur(0px)", offset:.18 },
+        { opacity:.88, transform:"translate(-50%,-36%) scale(1.04)", filter:"blur(0px)", offset:.4 },
+        { opacity:.5, transform:"translate(-50%,18%) scale(1.08)", filter:"blur(6px)", offset:.72 },
+        { opacity:0, transform:"translate(-50%,78%) scale(1.12)", filter:"blur(14px)" }
+      ], { duration:2700, easing:"cubic-bezier(.25,.05,.6,1)", fill:"forwards" });
       document.body.classList.add("rained");
       document.body.classList.remove("restored");
       setTimeout(() => {
         document.body.classList.remove("rained");
         document.body.classList.add("restored");
-      }, 1700);
+      }, 1600);
       setTimeout(() => {
         layer.remove();
-        document.body.classList.remove("rained", "restored");
+        document.body.classList.remove("rained","restored");
         busy = false;
-      }, 2900);
+      }, 2800);
     };
   }
-  cat.addEventListener("pointerdown", e => {
+  hit.addEventListener("contextmenu", e => e.preventDefault());
+  hit.addEventListener("dragstart", e => e.preventDefault());
+  base.addEventListener("contextmenu", e => e.preventDefault());
+  hit.addEventListener("pointerdown", e => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     taps++;
     glance();
-    if (taps % 5 === 0) setTimeout(spitScreen, 160);
+    if (taps % 5 === 0) setTimeout(spitScreen, 140);
   });
 })();
 </script>
